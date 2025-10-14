@@ -1,0 +1,1 @@
+{"rule":"EN_A_VS_AN","sentence":"^\\QAdd the crate to your build tooling workspace and create an \\E(?:Dummy|Ina|Jimmy-)[0-9]+\\Q with the layout and paths that describe your project:\\E$"}

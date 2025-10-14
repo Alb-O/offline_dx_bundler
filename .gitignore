@@ -1,0 +1,6 @@
+/target
+.direnv/
+result
+/tmp
+*.log
+*[_/-]cache*
