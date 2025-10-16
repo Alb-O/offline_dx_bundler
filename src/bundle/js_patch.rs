@@ -76,7 +76,7 @@ globalThis.__pivotOfflineWasm=__offlineWasmBytes;",
     r#"(?s)(?:window\.|globalThis\.)?__wasm_split_main_initSync=initSync;__wbg_init\(\{module_or_path:"[^"]+"\}\)\.then\(wasm=>\{.*\}\);"#,
   )
   .expect("invalid bootstrap regex");
-  let bootstrap_replacement = "const __offlineInit=(bytes=__offlineWasmBytes)=>__wbg_init({module:bytes}).then(wasm=>{\
+  let bootstrap_replacement = "const __offlineInit=(bytes=__offlineWasmBytes)=>__wbg_init({module_or_path:bytes,module:bytes}).then(wasm=>{\
 window.__dx_mainWasm=wasm;globalThis.__dx_mainWasm=wasm;if(wasm.__wbindgen_start===undefined){wasm.main();}return wasm;});\
 window.__wasm_split_main_initSync=initSync;globalThis.__wasm_split_main_initSync=initSync;\
 window.__dx___wbg_get_imports=__wbg_get_imports;globalThis.__dx___wbg_get_imports=__wbg_get_imports;\
