@@ -4,3 +4,4 @@ result
 /tmp
 *.log
 *[_/-]cache*
+/.pre-commit-config.yaml

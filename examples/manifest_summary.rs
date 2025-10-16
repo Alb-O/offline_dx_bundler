@@ -28,7 +28,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Offline site root: {}", summary.site_root);
     println!("Hero assets: {}", summary.hero_assets.join(", "));
 
-    for OfflineModuleSummary { program_id, module_id, asset_paths } in summary.modules {
+    for OfflineModuleSummary {
+        program_id,
+        module_id,
+        asset_paths,
+    } in summary.modules
+    {
         println!("{program_id}/{module_id} ({} assets)", asset_paths.len());
     }
 
