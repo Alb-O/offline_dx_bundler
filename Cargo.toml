@@ -1,7 +1,7 @@
 cargo-features = ["edition2024"]
 [package]
 name = "offline_dx_bundler"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Albert O'Shea"]
 edition = "2024"
 description = "Build-time helpers for preparing Dioxus WASM sites for fully offline delivery."
