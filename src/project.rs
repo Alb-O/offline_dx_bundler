@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::config::CollectionConfigOverrides;
+
 /// Static layout describing how authored content and offline bundles are organised.
 #[derive(Clone, Debug)]
 pub struct OfflineProjectLayout {
@@ -68,5 +70,12 @@ impl OfflineProjectLayout {
     /// Directory relative to each collection containing authored assets.
     pub fn entry_assets_dir(&self) -> &str {
         self.entry_assets_dir.as_str()
+    }
+
+    /// Clone the layout applying collection-specific overrides.
+    pub fn with_overrides(&self, overrides: &CollectionConfigOverrides) -> Self {
+        let mut layout = self.clone();
+        overrides.apply_to_layout(&mut layout);
+        layout
     }
 }

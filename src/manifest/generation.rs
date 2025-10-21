@@ -6,6 +6,7 @@ use std::path::Path;
 
 use crate::asset_paths::make_offline_asset_path;
 use crate::builder::BuildResult;
+use crate::config::load_document;
 use crate::manifest::markdown::{
     collect_markdown_asset_references, extract_first_heading, parse_entry_markdown,
     parse_order_from_id, resolve_markdown_assets,
@@ -37,83 +38,110 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                 continue;
             }
 
-            let collection_id = entry.file_name().to_string_lossy().to_string();
-            if collection_id.starts_with('.') {
+            let collection_name = entry.file_name().to_string_lossy().to_string();
+            if collection_name.starts_with('.') {
                 continue;
             }
-
-            if !selection.is_included(&collection_id) {
-                continue;
-            }
-
-            let metadata_path = entry.path().join(&layout.collection_metadata_file);
-            if !metadata_path.exists() {
-                continue;
-            }
-
-            let json_content = match fs::read_to_string(&metadata_path) {
-                Ok(content) => content,
-                Err(_) => continue,
-            };
-
-            let meta: CollectionMetaRecord = match serde_json::from_str(&json_content) {
-                Ok(meta) => meta,
-                Err(_) => continue,
-            };
 
             let collection_path = entry.path();
-
-            collect_assets_recursively(
-                &collection_id,
+            walk_collection_tree(
+                layout,
                 &collection_path,
-                Path::new(""),
-                false,
+                &collection_name,
+                selection,
                 &mut asset_map,
                 &mut used_names,
-                &layout.excluded_dir_name,
-                &layout.entry_assets_dir,
-                &layout.entry_markdown_file,
-                &layout.excluded_path_fragment,
-                &layout.collection_asset_literal_prefix,
-                layout.collection_metadata_file.as_str(),
+                &mut hero_match_arms,
+                &mut hero_asset_paths,
+                &mut collection_catalog,
+                &mut offline_entries,
+            );
+        }
+    }
+
+    Ok(ManifestGenerationResult {
+        collection_catalog,
+        offline_entries,
+        asset_map,
+        hero_asset_paths,
+        hero_match_arms,
+    })
+}
+
+fn walk_collection_tree<S: CollectionInclusion>(
+    parent_layout: &OfflineProjectLayout,
+    collection_path: &Path,
+    collection_id: &str,
+    selection: &S,
+    asset_map: &mut BTreeMap<(String, String), AssetEntry>,
+    used_names: &mut BTreeSet<String>,
+    hero_match_arms: &mut Vec<String>,
+    hero_asset_paths: &mut BTreeSet<String>,
+    collection_catalog: &mut Vec<CollectionCatalogRecord>,
+    offline_entries: &mut Vec<OfflineEntryRecord>,
+) {
+    let metadata_path = collection_path.join(&parent_layout.collection_metadata_file);
+    let mut collection_layout = parent_layout.clone();
+    let mut meta: Option<CollectionMetaRecord> = None;
+
+    if let Some((payload, overrides)) = load_document(&metadata_path) {
+        overrides.apply_to_layout(&mut collection_layout);
+        meta = serde_json::from_value(payload).ok();
+    }
+
+    if let Some(meta) = meta {
+        if selection.is_included(collection_id) {
+            collect_assets_recursively(
+                collection_id,
+                collection_path,
+                Path::new(""),
+                false,
+                asset_map,
+                used_names,
+                &collection_layout.excluded_dir_name,
+                &collection_layout.entry_assets_dir,
+                &collection_layout.entry_markdown_file,
+                &collection_layout.excluded_path_fragment,
+                &collection_layout.collection_asset_literal_prefix,
+                collection_layout.collection_metadata_file.as_str(),
             );
 
             if let Some(hero_image) = meta.hero_image.as_deref() {
                 let hero_rel = hero_image.trim_start_matches('/').replace('\\', "/");
                 if !hero_rel.is_empty() {
                     asset_map
-                        .entry((collection_id.clone(), hero_rel.clone()))
+                        .entry((collection_id.to_string(), hero_rel.clone()))
                         .or_insert_with(|| {
                             let const_name = sanitize_const_name(
-                                &collection_id,
+                                collection_id,
                                 &hero_rel,
-                                &used_names,
+                                used_names,
                             );
                             used_names.insert(const_name.clone());
                             let asset_path = format!(
                                 "{}/{}/{}",
-                                layout.collection_asset_literal_prefix.as_str(),
+                                collection_layout.collection_asset_literal_prefix.as_str(),
                                 collection_id,
                                 hero_rel
                             );
                             AssetEntry {
                                 const_name: const_name.clone(),
                                 literal_path: asset_path,
-                                collection_id: collection_id.clone(),
+                                collection_id: collection_id.to_string(),
                                 relative_path: hero_rel.clone(),
                             }
                         });
 
                     if let Some(entry) =
-                        asset_map.get(&(collection_id.clone(), hero_rel.clone()))
+                        asset_map.get(&(collection_id.to_string(), hero_rel.clone()))
                     {
-                        let collection_literal = serde_json::to_string(&collection_id).unwrap();
+                        let collection_literal = serde_json::to_string(collection_id).unwrap();
                         hero_match_arms.push(format!(
                             "        {} => Some(&{}),",
                             collection_literal, entry.const_name
                         ));
                         hero_asset_paths.insert(make_offline_asset_path(
-                            layout,
+                            &collection_layout,
                             &entry.collection_id,
                             &entry.relative_path,
                         ));
@@ -123,7 +151,7 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
 
             let mut entry_records: Vec<(usize, EntryRecord)> = Vec::new();
 
-            if let Ok(entry_iter) = fs::read_dir(&collection_path) {
+            if let Ok(entry_iter) = fs::read_dir(collection_path) {
                 for entry_dir in entry_iter.flatten() {
                     let entry_path = entry_dir.path();
 
@@ -133,11 +161,11 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
 
                     let entry_id = entry_dir.file_name().to_string_lossy().to_string();
 
-                    if entry_id.starts_with('.') || entry_id == layout.entry_assets_dir {
+                    if entry_id.starts_with('.') || entry_id == collection_layout.entry_assets_dir {
                         continue;
                     }
 
-                    let markdown_path = entry_path.join(&layout.entry_markdown_file);
+                    let markdown_path = entry_path.join(&collection_layout.entry_markdown_file);
                     if !markdown_path.exists() {
                         continue;
                     }
@@ -158,10 +186,10 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
 
                         let references = collect_markdown_asset_references(&body);
                         let (resolved_assets, unresolved_assets) = resolve_markdown_assets(
-                            layout,
+                            &collection_layout,
                             &references,
-                            &asset_map,
-                            &collection_id,
+                            asset_map,
+                            collection_id,
                             &entry_id,
                             asset_slug,
                         );
@@ -176,7 +204,7 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                         }
 
                         offline_entries.push(OfflineEntryRecord {
-                            collection_id: collection_id.clone(),
+                            collection_id: collection_id.to_string(),
                             entry_id: entry_id.clone(),
                             body: body.clone(),
                             asset_paths: resolved_assets,
@@ -189,7 +217,9 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                             sequence: order,
                             source: format!(
                                 "{}/{}/{}",
-                                collection_id, entry_id, layout.entry_markdown_file
+                                collection_id,
+                                entry_id,
+                                collection_layout.entry_markdown_file
                             ),
                         }));
                     }
@@ -212,20 +242,52 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                 .collect();
 
             collection_catalog.push(CollectionCatalogRecord {
-                id: collection_id,
+                id: collection_id.to_string(),
                 meta,
                 entries,
             });
         }
     }
 
-    Ok(ManifestGenerationResult {
-        collection_catalog,
-        offline_entries,
-        asset_map,
-        hero_asset_paths,
-        hero_match_arms,
-    })
+    if let Ok(children) = fs::read_dir(collection_path) {
+        for child in children.flatten() {
+            if !child.file_type().is_ok_and(|ft| ft.is_dir()) {
+                continue;
+            }
+
+            let name = child.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+
+            let child_path = child.path();
+            if !child_path
+                .join(&collection_layout.collection_metadata_file)
+                .exists()
+            {
+                continue;
+            }
+
+            let child_id = if collection_id.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", collection_id, name)
+            };
+
+            walk_collection_tree(
+                &collection_layout,
+                &child_path,
+                &child_id,
+                selection,
+                asset_map,
+                used_names,
+                hero_match_arms,
+                hero_asset_paths,
+                collection_catalog,
+                offline_entries,
+            );
+        }
+    }
 }
 
 #[cfg(test)]

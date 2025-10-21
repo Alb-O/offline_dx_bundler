@@ -65,19 +65,43 @@ The resulting [`OfflineArtifacts`](https://docs.rs/offline_dx_bundler/latest/off
 
 ### Runtime configuration
 
-To avoid hard-coding every path, you can drop an `offline.config.json` file next to your Cargo manifest. Any fields you omit fall back to the defaults shown below:
+Offline projects describe their layout through the nearest `collection.json`. A root-level
+document can provide a `config` object with camelCase fields that override the built-in
+defaults:
 
 ```json
 {
-  "collections_dir": "../content/programs",
-  "collections_local_path": "collections.local.json",
-  "entry_assets_dir": "assets",
-  "entry_markdown_file": "index.md",
-  "collection_metadata_file": "collection.json"
+  "config": {
+    "collectionsDir": "../content/programs",
+    "collectionsLocalPath": "collections.local.json",
+    "entryAssetsDir": "assets",
+    "entryMarkdownFile": "index.md",
+    "collectionMetadataFile": "collection.json"
+  }
 }
 ```
 
-The build helper automatically loads this file and converts it into the layout used by the bundler.
+Child directories inherit these values automatically. When a deeper `collection.json` defines
+its own `config`, those overrides apply to that directory and any descendants, allowing local
+tweaks without duplicating the full configuration.
+
+#### Filtering collections at build time
+
+If you want to build a smaller offline bundle, drop a `collections.local.json` file alongside
+your authored content. The layout mirrors the legacy behaviour but now honours hierarchical
+paths – identifiers such as `P0010-snb` apply to that collection and all descendants, while
+`P0010-snb/module-a` only affects the nested entry.
+
+```json
+{
+  "include": ["P0010-snb"],
+  "exclude": ["P0040-demo2", "P0020-loading-updating-charts/dev"]
+}
+```
+
+When the `include` list is present only the listed identifiers (and their children) are
+compiled. The `exclude` list always removes matching identifiers, including their descendants,
+allowing you to prune individual branches after broad include rules.
 
 ## Examples
 
