@@ -10,10 +10,10 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use crate::asset_paths::{
     generate_asset_candidates, make_offline_asset_path, should_ignore_asset_reference,
 };
-use crate::models::{AssetEntry, ModuleFrontmatterRecord};
+use crate::models::{AssetEntry, EntryFrontmatterRecord};
 use crate::project::OfflineProjectLayout;
 
-/// Parse the numeric ordering prefix from a module identifier if present.
+/// Parse the numeric ordering prefix from an entry identifier if present.
 pub fn parse_order_from_id(id: &str) -> Option<usize> {
     let prefix = id.split_once('-').map(|(value, _)| value).unwrap_or(id);
     let digits: String = prefix.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -60,27 +60,27 @@ pub fn collect_markdown_asset_references(markdown: &str) -> BTreeSet<String> {
     references
 }
 
-/// Resolve asset references for a specific module against the discovered asset map.
+/// Resolve asset references for a specific entry against the discovered asset map.
 pub fn resolve_markdown_assets(
     layout: &OfflineProjectLayout,
     references: &BTreeSet<String>,
     asset_map: &BTreeMap<(String, String), AssetEntry>,
-    program_id: &str,
-    module_id: &str,
+    collection_id: &str,
+    entry_id: &str,
     asset_slug: Option<&str>,
 ) -> (Vec<String>, Vec<String>) {
     let mut resolved = BTreeSet::new();
     let mut unresolved = Vec::new();
 
     for reference in references {
-        let candidates = generate_asset_candidates(layout, module_id, asset_slug, reference);
+        let candidates = generate_asset_candidates(layout, entry_id, asset_slug, reference);
         let mut found = false;
 
         for candidate in candidates {
-            if let Some(entry) = asset_map.get(&(program_id.to_string(), candidate)) {
+            if let Some(entry) = asset_map.get(&(collection_id.to_string(), candidate)) {
                 resolved.insert(make_offline_asset_path(
                     layout,
-                    &entry.program_id,
+                    &entry.collection_id,
                     &entry.relative_path,
                 ));
                 found = true;
@@ -96,17 +96,15 @@ pub fn resolve_markdown_assets(
     (resolved.into_iter().collect(), unresolved)
 }
 
-/// Parse a module markdown file, extracting frontmatter metadata and the content body.
-pub fn parse_module_markdown(
-    module_markdown_path: &Path,
-) -> Option<(ModuleFrontmatterRecord, String)> {
-    let content = fs::read_to_string(module_markdown_path).ok()?;
+/// Parse an entry markdown file, extracting frontmatter metadata and the content body.
+pub fn parse_entry_markdown(entry_markdown_path: &Path) -> Option<(EntryFrontmatterRecord, String)> {
+    let content = fs::read_to_string(entry_markdown_path).ok()?;
     let matter = Matter::<YAML>::new();
     let parsed = matter.parse(&content).ok()?;
 
-    let frontmatter: ModuleFrontmatterRecord = parsed
+    let frontmatter: EntryFrontmatterRecord = parsed
         .data
-        .and_then(|yaml| serde_yaml::from_value::<ModuleFrontmatterRecord>(yaml).ok())
+        .and_then(|yaml| serde_yaml::from_value::<EntryFrontmatterRecord>(yaml).ok())
         .unwrap_or_default();
 
     Some((frontmatter, parsed.content))
@@ -217,14 +215,14 @@ mod tests {
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",
@@ -251,21 +249,21 @@ mod tests {
         let layout = layout();
         let mut asset_map = BTreeMap::new();
         asset_map.insert(
-            ("program".to_string(), "module/assets/image.png".to_string()),
+            ("collection".to_string(), "entry/assets/image.png".to_string()),
             AssetEntry {
                 const_name: "CONST".into(),
                 literal_path: "".into(),
-                program_id: "program".into(),
-                relative_path: "module/assets/image.png".into(),
+                collection_id: "collection".into(),
+                relative_path: "entry/assets/image.png".into(),
             },
         );
 
         let references = BTreeSet::from(["image.png".to_string()]);
         let (resolved, unresolved) =
-            resolve_markdown_assets(&layout, &references, &asset_map, "program", "module", None);
+            resolve_markdown_assets(&layout, &references, &asset_map, "collection", "entry", None);
 
         assert_eq!(unresolved.len(), 0);
         assert_eq!(resolved.len(), 1);
-        assert_eq!(resolved[0], "programs/program/module/assets/image.png");
+        assert_eq!(resolved[0], "programs/collection/entry/assets/image.png");
     }
 }

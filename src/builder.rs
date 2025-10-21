@@ -10,25 +10,25 @@ use same_file::is_same_file;
 use crate::asset_paths::make_offline_asset_path;
 use crate::manifest::generate_offline_manifest;
 use crate::models::{
-    AssetEntry, ManifestGenerationResult, OfflineManifestSummary, OfflineModuleRecord,
-    OfflineModuleSummary,
+    AssetEntry, ManifestGenerationResult, OfflineEntryRecord, OfflineEntrySummary,
+    OfflineManifestSummary,
 };
 use crate::project::{OfflineBuildContext, OfflineProjectLayout};
-use crate::selection::ProgramInclusion;
+use crate::selection::CollectionInclusion;
 
 /// Generic build result type used across the crate.
 pub type BuildResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 /// Collection of generated artifacts required by the offline bundle.
 pub struct OfflineArtifacts {
-    /// Rust source defining the program asset lookup table.
+    /// Rust source defining the collection asset lookup table.
     pub asset_table_code: String,
-    /// Rust source providing offline module bodies and asset mappings.
+    /// Rust source providing offline entry bodies and asset mappings.
     pub offline_manifest_code: String,
     /// Offline manifest serialised as prettified JSON.
     pub offline_manifest_json: String,
-    /// Program catalog JSON used by the launcher UI.
-    pub program_catalog_json: String,
+    /// Collection catalog JSON used by the launcher UI.
+    pub collection_catalog_json: String,
     /// File system paths that should trigger rerunning the build script when changed.
     pub rerun_paths: Vec<PathBuf>,
 }
@@ -45,16 +45,16 @@ impl<'a> OfflineBuilder<'a> {
     }
 
     /// Generate the offline manifest, mirror referenced assets and return the resulting artifacts.
-    pub fn build<S: ProgramInclusion>(&self, selection: &S) -> BuildResult<OfflineArtifacts> {
+    pub fn build<S: CollectionInclusion>(&self, selection: &S) -> BuildResult<OfflineArtifacts> {
         let ManifestGenerationResult {
-            program_catalog,
-            offline_modules,
+            collection_catalog,
+            offline_entries,
             asset_map,
             hero_asset_paths,
             hero_match_arms,
         } = self.generate_manifest(selection)?;
 
-        self.prepare_program_asset_sources(&asset_map)?;
+        self.prepare_collection_asset_sources(&asset_map)?;
 
         let layout = self.context.layout;
         let mirror_base = &self.context.asset_mirror_dir;
@@ -71,27 +71,27 @@ impl<'a> OfflineBuilder<'a> {
         );
 
         let (asset_definitions, asset_match_entries) =
-            render_program_assets(&asset_map, &mirror_prefix);
+            render_collection_assets(&asset_map, &mirror_prefix);
         let hero_section = render_hero_match_section(&hero_match_arms);
 
         let asset_table_code = format!(
             r#"// Generated at build time by build tooling
 use dioxus::prelude::Asset;
 
-// Static asset definitions for all programs
+// Static asset definitions for all collections
 {}
 
 // Generated lookup function
-fn get_program_hero_asset(program_id: &str) -> Option<&'static Asset> {{
-    match program_id {{
+fn get_collection_hero_asset(collection_id: &str) -> Option<&'static Asset> {{
+    match collection_id {{
 {}
     }}
 }}
 
-// Lookup for arbitrary program assets referenced in markdown
+// Lookup for arbitrary collection assets referenced in markdown
 #[allow(unreachable_patterns)]
-pub(crate) fn get_program_asset(program_id: &str, relative_path: &str) -> Option<&'static Asset> {{
-    match (program_id, relative_path) {{
+pub(crate) fn get_collection_asset(collection_id: &str, relative_path: &str) -> Option<&'static Asset> {{
+    match (collection_id, relative_path) {{
 {}
         _ => None,
     }}
@@ -102,66 +102,66 @@ pub(crate) fn get_program_asset(program_id: &str, relative_path: &str) -> Option
             asset_match_entries.join("\n"),
         );
 
-        let (offline_module_code, offline_asset_code) =
-            render_offline_module_tables(&layout, &offline_modules, &asset_map);
+        let (offline_entry_code, offline_asset_code) =
+            render_offline_entry_tables(&layout, &offline_entries, &asset_map);
 
         let offline_manifest_code = format!(
             r#"// Generated at build time for the offline-html feature
 use serde::{{Deserialize, Serialize}};
 
 #[derive(Clone)]
-pub struct OfflineModule {{
+pub struct OfflineEntry {{
     pub body: &'static str,
     pub assets: &'static [&'static str],
 }}
 {}
 
 #[allow(dead_code)]
-pub fn offline_module(program_id: &str, module_id: &str) -> Option<OfflineModule> {{
-    match (program_id, module_id) {{
+pub fn offline_entry(collection_id: &str, entry_id: &str) -> Option<OfflineEntry> {{
+    match (collection_id, entry_id) {{
 {}
     }}
 }}
 
-pub(crate) fn offline_module_body(program_id: &str, module_id: &str) -> Option<&'static str> {{
-    offline_module(program_id, module_id).map(|record| record.body)
+pub(crate) fn offline_entry_body(collection_id: &str, entry_id: &str) -> Option<&'static str> {{
+    offline_entry(collection_id, entry_id).map(|record| record.body)
 }}
 
-pub(crate) fn offline_module_assets(program_id: &str, module_id: &str) -> Option<&'static [&'static str]> {{
-    offline_module(program_id, module_id).map(|record| record.assets)
+pub(crate) fn offline_entry_assets(collection_id: &str, entry_id: &str) -> Option<&'static [&'static str]> {{
+    offline_entry(collection_id, entry_id).map(|record| record.assets)
 }}
 
 #[allow(unreachable_patterns)]
-pub(crate) fn offline_program_asset(program_id: &str, relative_path: &str) -> Option<&'static str> {{
-    match (program_id, relative_path) {{
+pub(crate) fn offline_collection_asset(collection_id: &str, relative_path: &str) -> Option<&'static str> {{
+    match (collection_id, relative_path) {{
 {}
         _ => None,
     }}
 }}
 "#,
-            offline_module_code, offline_asset_code.0, offline_asset_code.1,
+            offline_entry_code, offline_asset_code.0, offline_asset_code.1,
         );
 
         let offline_manifest_json = serde_json::to_string_pretty(&OfflineManifestSummary {
             site_root: layout.offline_site_root.to_string(),
-            modules: offline_modules
+            entries: offline_entries
                 .iter()
-                .map(|module| OfflineModuleSummary {
-                    program_id: module.program_id.clone(),
-                    module_id: module.module_id.clone(),
-                    asset_paths: module.asset_paths.clone(),
+                .map(|entry| OfflineEntrySummary {
+                    collection_id: entry.collection_id.clone(),
+                    entry_id: entry.entry_id.clone(),
+                    asset_paths: entry.asset_paths.clone(),
                 })
                 .collect(),
             hero_assets: hero_asset_paths.iter().cloned().collect(),
         })?;
 
-        let program_catalog_json = serde_json::to_string_pretty(&program_catalog)?;
+        let collection_catalog_json = serde_json::to_string_pretty(&collection_catalog)?;
 
-        let mut rerun_paths = vec![self.context.programs_dir.to_path_buf()];
-        rerun_paths.push(self.context.programs_local_path.to_path_buf());
-        append_program_metadata_paths(
-            self.context.programs_dir,
-            layout.program_metadata_file,
+        let mut rerun_paths = vec![self.context.collections_dir.to_path_buf()];
+        rerun_paths.push(self.context.collections_local_path.to_path_buf());
+        append_collection_metadata_paths(
+            self.context.collections_dir,
+            layout.collection_metadata_file,
             &mut rerun_paths,
         );
 
@@ -169,19 +169,19 @@ pub(crate) fn offline_program_asset(program_id: &str, relative_path: &str) -> Op
             asset_table_code,
             offline_manifest_code,
             offline_manifest_json,
-            program_catalog_json,
+            collection_catalog_json,
             rerun_paths,
         })
     }
 
-    fn generate_manifest<S: ProgramInclusion>(
+    fn generate_manifest<S: CollectionInclusion>(
         &self,
         selection: &S,
     ) -> BuildResult<ManifestGenerationResult> {
-        generate_offline_manifest(&self.context.layout, self.context.programs_dir, selection)
+        generate_offline_manifest(&self.context.layout, self.context.collections_dir, selection)
     }
 
-    fn prepare_program_asset_sources(
+    fn prepare_collection_asset_sources(
         &self,
         asset_map: &BTreeMap<(String, String), AssetEntry>,
     ) -> BuildResult<()> {
@@ -190,7 +190,7 @@ pub(crate) fn offline_program_asset(program_id: &str, relative_path: &str) -> Op
         let mut available_assets = Vec::new();
 
         for entry in asset_map.values() {
-            let source_path = entry.source_path(self.context.programs_dir);
+            let source_path = entry.source_path(self.context.collections_dir);
             if !source_path.exists() {
                 continue;
             }
@@ -211,24 +211,24 @@ pub(crate) fn offline_program_asset(program_id: &str, relative_path: &str) -> Op
                 fs::create_dir_all(parent)?;
             }
 
-            install_program_asset(&source, &destination)?;
+            install_collection_asset(&source, &destination)?;
         }
 
         Ok(())
     }
 }
 
-fn append_program_metadata_paths(
-    programs_dir: &Path,
+fn append_collection_metadata_paths(
+    collections_dir: &Path,
     metadata_file: &str,
     rerun_paths: &mut Vec<PathBuf>,
 ) {
-    if let Ok(entries) = fs::read_dir(programs_dir) {
+    if let Ok(entries) = fs::read_dir(collections_dir) {
         for entry in entries.flatten() {
             if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
-                let program_json = entry.path().join(metadata_file);
-                if program_json.exists() {
-                    rerun_paths.push(program_json);
+                let metadata = entry.path().join(metadata_file);
+                if metadata.exists() {
+                    rerun_paths.push(metadata);
                 }
             }
         }
@@ -289,7 +289,7 @@ fn prune_mirror_subtree(
     Ok(!has_required_descendants && !relative.as_os_str().is_empty())
 }
 
-fn install_program_asset(source: &Path, destination: &Path) -> std::io::Result<()> {
+fn install_collection_asset(source: &Path, destination: &Path) -> std::io::Result<()> {
     if destination.exists() {
         if is_same_file(source, destination)? {
             return Ok(());
@@ -311,11 +311,11 @@ fn install_program_asset(source: &Path, destination: &Path) -> std::io::Result<(
 
 type OfflineAssetTables = (String, String);
 
-type OfflineModuleTables = (String, OfflineAssetTables);
+type OfflineEntryTables = (String, OfflineAssetTables);
 
 type AssetMatchTables = (Vec<String>, Vec<String>);
 
-fn render_program_assets(
+fn render_collection_assets(
     asset_map: &BTreeMap<(String, String), AssetEntry>,
     mirror_prefix: &str,
 ) -> AssetMatchTables {
@@ -326,11 +326,11 @@ fn render_program_assets(
         let mirror_path = format!(
             "{}/{}/{}",
             mirror_prefix.trim_end_matches('/'),
-            entry.program_id,
+            entry.collection_id,
             entry.relative_path
         );
         let mirror_literal = serde_json::to_string(&mirror_path).unwrap();
-        let program_literal = serde_json::to_string(&entry.program_id).unwrap();
+        let collection_literal = serde_json::to_string(&entry.collection_id).unwrap();
         let relative_literal = serde_json::to_string(&entry.relative_path).unwrap();
 
         asset_definitions.push(format!(
@@ -339,7 +339,7 @@ fn render_program_assets(
         ));
         asset_match_entries.push(format!(
             "        ({}, {}) => Some(&{}),",
-            program_literal, relative_literal, entry.const_name
+            collection_literal, relative_literal, entry.const_name
         ));
     }
 
@@ -354,59 +354,60 @@ fn render_hero_match_section(hero_match_arms: &[String]) -> String {
     }
 }
 
-fn render_offline_module_tables(
+fn render_offline_entry_tables(
     layout: &OfflineProjectLayout,
-    offline_modules: &[OfflineModuleRecord],
+    offline_entries: &[OfflineEntryRecord],
     asset_map: &BTreeMap<(String, String), AssetEntry>,
-) -> OfflineModuleTables {
-    let mut module_assets_statics =
+) -> OfflineEntryTables {
+    let mut entry_assets_statics =
         vec!["static OFFLINE_EMPTY_ASSETS: [&str; 0] = [];".to_string()];
-    let mut module_match_arms = Vec::new();
+    let mut entry_match_arms = Vec::new();
     let mut used_idents = BTreeSet::new();
 
-    for module in offline_modules {
-        let assets_ref = if module.asset_paths.is_empty() {
+    for entry in offline_entries {
+        let assets_ref = if entry.asset_paths.is_empty() {
             "OFFLINE_EMPTY_ASSETS".to_string()
         } else {
             let ident =
-                sanitize_module_ident(&module.program_id, &module.module_id, &mut used_idents);
-            let asset_literals: Vec<String> = module
+                sanitize_entry_ident(&entry.collection_id, &entry.entry_id, &mut used_idents);
+            let asset_literals: Vec<String> = entry
                 .asset_paths
                 .iter()
                 .map(|path| serde_json::to_string(path).unwrap())
                 .collect();
-            module_assets_statics.push(format!(
+            entry_assets_statics.push(format!(
                 "static {ident}: [&str; {}] = [{}];",
-                module.asset_paths.len(),
+                entry.asset_paths.len(),
                 asset_literals.join(", ")
             ));
             ident
         };
 
-        let body_literal = serde_json::to_string(&module.body).unwrap();
-        let program_literal = serde_json::to_string(&module.program_id).unwrap();
-        let module_literal = serde_json::to_string(&module.module_id).unwrap();
-        module_match_arms.push(format!(
-            "        ({}, {}) => Some(OfflineModule {{ body: {}, assets: &{} }}),",
-            program_literal, module_literal, body_literal, assets_ref
+        let body_literal = serde_json::to_string(&entry.body).unwrap();
+        let collection_literal = serde_json::to_string(&entry.collection_id).unwrap();
+        let entry_literal = serde_json::to_string(&entry.entry_id).unwrap();
+        entry_match_arms.push(format!(
+            "        ({}, {}) => Some(OfflineEntry {{ body: {}, assets: &{} }}),",
+            collection_literal, entry_literal, body_literal, assets_ref
         ));
     }
 
-    let module_match_body = if module_match_arms.is_empty() {
+    let entry_match_body = if entry_match_arms.is_empty() {
         "        _ => None,".to_string()
     } else {
-        format!("{}\n        _ => None,", module_match_arms.join("\n"))
+        format!("{}\n        _ => None,", entry_match_arms.join("\n"))
     };
 
     let mut offline_asset_match_entries = Vec::new();
     for entry in asset_map.values() {
-        let offline_path = make_offline_asset_path(layout, &entry.program_id, &entry.relative_path);
+        let offline_path =
+            make_offline_asset_path(layout, &entry.collection_id, &entry.relative_path);
         let literal = serde_json::to_string(&offline_path).unwrap();
-        let program_literal = serde_json::to_string(&entry.program_id).unwrap();
+        let collection_literal = serde_json::to_string(&entry.collection_id).unwrap();
         let relative_literal = serde_json::to_string(&entry.relative_path).unwrap();
         offline_asset_match_entries.push(format!(
             "        ({}, {}) => Some({}),",
-            program_literal, relative_literal, literal
+            collection_literal, relative_literal, literal
         ));
     }
 
@@ -420,13 +421,17 @@ fn render_offline_module_tables(
     };
 
     (
-        module_assets_statics.join("\n\n"),
-        (module_match_body, offline_asset_match_body),
+        entry_assets_statics.join("\n\n"),
+        (entry_match_body, offline_asset_match_body),
     )
 }
 
-fn sanitize_module_ident(program_id: &str, module_id: &str, used: &mut BTreeSet<String>) -> String {
-    let mut base = format!("{}_{}", program_id, module_id)
+fn sanitize_entry_ident(
+    collection_id: &str,
+    entry_id: &str,
+    used: &mut BTreeSet<String>,
+) -> String {
+    let mut base = format!("{}_{}", collection_id, entry_id)
         .to_uppercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
@@ -457,22 +462,22 @@ mod tests {
     use tempfile::tempdir;
 
     struct AllowAll;
-    impl ProgramInclusion for AllowAll {
-        fn is_included(&self, _program_id: &str) -> bool {
+    impl CollectionInclusion for AllowAll {
+        fn is_included(&self, _collection_id: &str) -> bool {
             true
         }
     }
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",
@@ -506,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn install_program_asset_reuses_existing_links() -> std::io::Result<()> {
+    fn install_collection_asset_reuses_existing_links() -> std::io::Result<()> {
         let temp = tempdir()?;
         let root = temp.path();
 
@@ -519,11 +524,11 @@ mod tests {
         fs::write(&source, b"content")?;
         let destination = mirror_root.join("file.txt");
 
-        install_program_asset(&source, &destination)?;
+        install_collection_asset(&source, &destination)?;
         assert!(destination.exists());
         assert!(same_file::is_same_file(&source, &destination)?);
 
-        install_program_asset(&source, &destination)?;
+        install_collection_asset(&source, &destination)?;
         assert!(same_file::is_same_file(&source, &destination)?);
 
         Ok(())

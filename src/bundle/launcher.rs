@@ -60,14 +60,14 @@ mod tests {
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",

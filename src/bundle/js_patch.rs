@@ -22,11 +22,11 @@ pub fn patch_js_module<F>(
 where
     F: FnOnce() -> Result<String>,
 {
-    let js_path = site_root.join(layout.module_assets_dir).join(js_name);
+    let js_path = site_root.join(layout.entry_assets_dir).join(js_name);
     let mut text = fs::read_to_string(&js_path)
         .with_context(|| format!("failed to read {}", js_path.display()))?;
 
-    let assets_prefix = format!("{}/", layout.module_assets_dir);
+    let assets_prefix = format!("{}/", layout.entry_assets_dir);
     text = text.replace(
         &format!("\"/./{}", assets_prefix),
         &format!("\"{}", assets_prefix),
@@ -44,7 +44,7 @@ const importMeta={url:__offlineScript?__offlineScript.src:window.location.href,m
         .replace(&text, import_meta_replacement)
         .into_owned();
 
-    let wasm_path = site_root.join(layout.module_assets_dir).join(wasm_name);
+    let wasm_path = site_root.join(layout.entry_assets_dir).join(wasm_name);
     let wasm_bytes =
         fs::read(&wasm_path).with_context(|| format!("failed to read {}", wasm_path.display()))?;
     let wasm_base64 = general_purpose::STANDARD.encode(wasm_bytes);
@@ -139,14 +139,14 @@ mod tests {
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",
@@ -158,7 +158,7 @@ mod tests {
     fn patches_js_module_with_injected_binary_name() {
         let dir = tempdir().unwrap();
         let layout = layout();
-        let assets_dir = dir.path().join(layout.module_assets_dir);
+        let assets_dir = dir.path().join(layout.entry_assets_dir);
         fs::create_dir_all(&assets_dir).unwrap();
 
         let js_path = assets_dir.join("module.js");

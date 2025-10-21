@@ -17,21 +17,21 @@ pub struct OfflineManifest {
     /// Hero assets required by the offline launcher UI.
     #[serde(default)]
     pub hero_assets: Vec<String>,
-    /// Modules discovered during the build.
+    /// Entries discovered during the build.
     #[serde(default)]
-    pub modules: Vec<OfflineModule>,
+    pub entries: Vec<OfflineEntry>,
 }
 
-/// Offline module entry contained within the manifest.
+/// Offline entry contained within the manifest.
 #[derive(Debug, Deserialize)]
-pub struct OfflineModule {
-    /// Program identifier the module belongs to.
+pub struct OfflineEntry {
+    /// Collection identifier the entry belongs to.
     #[serde(default)]
-    pub program_id: String,
-    /// Module identifier within the program.
+    pub collection_id: String,
+    /// Entry identifier within the collection.
     #[serde(default)]
-    pub module_id: String,
-    /// Asset paths referenced by the module body.
+    pub entry_id: String,
+    /// Asset paths referenced by the entry body.
     #[serde(default)]
     pub asset_paths: Vec<String>,
 }
@@ -78,14 +78,14 @@ mod tests {
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",
@@ -97,7 +97,7 @@ mod tests {
         OfflineManifest {
             site_root: root.map(|value| value.to_string()),
             hero_assets: Vec::new(),
-            modules: Vec::new(),
+            entries: Vec::new(),
         }
     }
 

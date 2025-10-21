@@ -16,26 +16,26 @@ Add the crate to your build tooling workspace and create an [`OfflineBuildContex
 
 ```rust,no_run
 use offline_dx_bundler::{OfflineBuildContext, OfflineBuilder, OfflineProjectLayout};
-use offline_dx_bundler::selection::ProgramInclusion;
+use offline_dx_bundler::selection::CollectionInclusion;
 use std::path::{Path, PathBuf};
 
 struct IncludeAll;
-impl ProgramInclusion for IncludeAll {
-    fn is_included(&self, _program_id: &str) -> bool {
+impl CollectionInclusion for IncludeAll {
+    fn is_included(&self, _collection_id: &str) -> bool {
         true
     }
 }
 
 fn main() -> anyhow::Result<()> {
     let layout = OfflineProjectLayout {
-        module_assets_dir: "assets",
-        module_markdown_file: "index.md",
-        program_metadata_file: "program.json",
-        prod_dir_name: "prod",
-        prod_path_fragment: "/prod/",
-        program_asset_literal_prefix: "/content/programs",
+        entry_assets_dir: "assets",
+        entry_markdown_file: "index.md",
+        collection_metadata_file: "program.json",
+        excluded_dir_name: "prod",
+        excluded_path_fragment: "/prod/",
+        collection_asset_literal_prefix: "/content/programs",
         offline_site_root: "site",
-        programs_dir_name: "programs",
+        collections_dir_name: "programs",
         offline_bundle_root: "target/offline-html",
         index_html_file: "index.html",
         target_dir: "target",
@@ -43,12 +43,12 @@ fn main() -> anyhow::Result<()> {
     };
 
     let manifest_dir = Path::new("./rs");
-    let programs_dir = Path::new("./content/programs");
+    let collections_dir = Path::new("./content/programs");
     let context = OfflineBuildContext::new(
         layout,
         manifest_dir,
-        programs_dir,
-        programs_dir,
+        collections_dir,
+        collections_dir,
         PathBuf::from("./target/offline-assets"),
     );
 

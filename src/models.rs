@@ -5,15 +5,15 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-/// Metadata describing a training program parsed from `program.json`.
+/// Metadata describing an authored collection parsed from the metadata file.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProgramMetaRecord {
-    /// Program title taken from the frontmatter metadata file.
+pub struct CollectionMetaRecord {
+    /// Collection title taken from the frontmatter metadata file.
     pub title: String,
-    /// Optional program description rendered alongside the title.
+    /// Optional collection description rendered alongside the title.
     pub description: Option<String>,
-    /// Optional semantic version string attached to the program.
+    /// Optional semantic version string attached to the collection.
     pub version: Option<String>,
     /// Optional asset slug used to construct asset paths.
     pub asset_slug: Option<String>,
@@ -21,44 +21,44 @@ pub struct ProgramMetaRecord {
     pub hero_image: Option<String>,
 }
 
-/// Optional frontmatter fields attached to module markdown files.
+/// Optional frontmatter fields attached to entry markdown files.
 #[derive(Debug, Default, Clone, Deserialize)]
-pub struct ModuleFrontmatterRecord {
-    /// Module title rendered in the offline experience.
+pub struct EntryFrontmatterRecord {
+    /// Entry title rendered in the offline experience.
     pub title: Option<String>,
-    /// Optional section grouping for the module.
+    /// Optional section grouping for the entry.
     pub section: Option<String>,
     /// Explicit ordering override supplied in authored content.
     pub order: Option<usize>,
 }
 
-/// Structured representation of a program and its discovered modules.
+/// Structured representation of a collection and its discovered entries.
 #[derive(Debug, Clone, Serialize)]
-pub struct ProgramCatalogRecord {
-    /// Stable identifier for the program.
+pub struct CollectionCatalogRecord {
+    /// Stable identifier for the collection.
     pub id: String,
-    /// Metadata describing the program.
-    pub meta: ProgramMetaRecord,
-    /// Modules discovered for the program.
-    pub modules: Vec<ModuleRecord>,
+    /// Metadata describing the collection.
+    pub meta: CollectionMetaRecord,
+    /// Entries discovered for the collection.
+    pub entries: Vec<EntryRecord>,
 }
 
-/// Rendered module metadata for catalog presentation.
+/// Rendered entry metadata for catalog presentation.
 #[derive(Debug, Clone, Serialize)]
-pub struct ModuleRecord {
-    /// Stable identifier for the module.
+pub struct EntryRecord {
+    /// Stable identifier for the entry.
     pub id: String,
-    /// Human readable module title.
+    /// Human readable entry title.
     pub title: String,
-    /// Optional section grouping the module belongs to.
+    /// Optional section grouping the entry belongs to.
     pub section: Option<String>,
     /// Sequence value used to sort modules.
     pub sequence: usize,
-    /// Path to the markdown source file that produced the module body.
+    /// Path to the markdown source file that produced the entry body.
     pub source: String,
 }
 
-/// Representation of a program asset required by the offline bundle.
+/// Representation of a collection asset required by the offline bundle.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct AssetEntry {
@@ -66,47 +66,47 @@ pub struct AssetEntry {
     pub const_name: String,
     /// Asset path as embedded in the generated Rust code.
     pub literal_path: String,
-    /// Program identifier associated with the asset.
-    pub program_id: String,
-    /// Relative path of the asset within the program directory.
+    /// Collection identifier associated with the asset.
+    pub collection_id: String,
+    /// Relative path of the asset within the collection directory.
     pub relative_path: String,
 }
 
 impl AssetEntry {
     /// Relative path within the asset mirror for this entry.
     pub fn mirror_relative_path(&self) -> PathBuf {
-        PathBuf::from(&self.program_id).join(&self.relative_path)
+        PathBuf::from(&self.collection_id).join(&self.relative_path)
     }
 
-    /// Source path of the asset relative to the authored programs directory.
-    pub fn source_path(&self, programs_dir: &Path) -> PathBuf {
-        programs_dir
-            .join(&self.program_id)
+    /// Source path of the asset relative to the authored collections directory.
+    pub fn source_path(&self, collections_dir: &Path) -> PathBuf {
+        collections_dir
+            .join(&self.collection_id)
             .join(&self.relative_path)
     }
 }
 
-/// Fully rendered offline module representation.
+/// Fully rendered offline entry representation.
 #[derive(Debug, Clone)]
-pub struct OfflineModuleRecord {
-    /// Program identifier the module belongs to.
-    pub program_id: String,
-    /// Module identifier.
-    pub module_id: String,
-    /// Rendered HTML body for the module.
+pub struct OfflineEntryRecord {
+    /// Collection identifier the entry belongs to.
+    pub collection_id: String,
+    /// Entry identifier.
+    pub entry_id: String,
+    /// Rendered HTML body for the entry.
     pub body: String,
-    /// Relative asset paths referenced by the module.
+    /// Relative asset paths referenced by the entry.
     pub asset_paths: Vec<String>,
 }
 
-/// Serializable summary of an offline module.
+/// Serializable summary of an offline entry.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct OfflineModuleSummary {
-    /// Program identifier the module belongs to.
-    pub program_id: String,
-    /// Module identifier.
-    pub module_id: String,
-    /// Relative asset paths referenced by the module.
+pub struct OfflineEntrySummary {
+    /// Collection identifier the entry belongs to.
+    pub collection_id: String,
+    /// Entry identifier.
+    pub entry_id: String,
+    /// Relative asset paths referenced by the entry.
     pub asset_paths: Vec<String>,
 }
 
@@ -115,8 +115,8 @@ pub struct OfflineModuleSummary {
 pub struct OfflineManifestSummary {
     /// Relative path to the offline site root inside the bundle output.
     pub site_root: String,
-    /// Summary of modules included in the manifest.
-    pub modules: Vec<OfflineModuleSummary>,
+    /// Summary of entries included in the manifest.
+    pub entries: Vec<OfflineEntrySummary>,
     /// Collected hero asset paths required by the offline experience.
     pub hero_assets: Vec<String>,
 }
@@ -124,13 +124,13 @@ pub struct OfflineManifestSummary {
 /// Complete manifest generation output returned by [`crate::OfflineBuilder`].
 #[derive(Debug)]
 pub struct ManifestGenerationResult {
-    /// Records describing the discovered programs and modules.
-    pub program_catalog: Vec<ProgramCatalogRecord>,
-    /// Complete representation of modules required for the offline bundle.
-    pub offline_modules: Vec<OfflineModuleRecord>,
-    /// Mapping of program and relative path to offline asset entries.
+    /// Records describing the discovered collections and entries.
+    pub collection_catalog: Vec<CollectionCatalogRecord>,
+    /// Complete representation of entries required for the offline bundle.
+    pub offline_entries: Vec<OfflineEntryRecord>,
+    /// Mapping of collection and relative path to offline asset entries.
     pub asset_map: BTreeMap<(String, String), AssetEntry>,
-    /// Hero assets collected while scanning program metadata.
+    /// Hero assets collected while scanning collection metadata.
     pub hero_asset_paths: BTreeSet<String>,
     /// Match arms used to generate hero asset lookup code.
     pub hero_match_arms: Vec<String>,

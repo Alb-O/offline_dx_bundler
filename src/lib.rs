@@ -16,4 +16,4 @@ pub mod selection;
 #[cfg(not(target_arch = "wasm32"))]
 pub use builder::{BuildResult, OfflineArtifacts, OfflineBuilder};
 pub use project::{OfflineBuildContext, OfflineProjectLayout};
-pub use selection::ProgramInclusion;
+pub use selection::CollectionInclusion;

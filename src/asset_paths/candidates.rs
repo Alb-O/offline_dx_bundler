@@ -4,12 +4,12 @@ use crate::project::OfflineProjectLayout;
 
 /// Generate candidate paths for resolving a markdown asset reference.
 ///
-/// References can appear relative to the module, the optional asset slug, or via explicit
+/// References can appear relative to the entry, the optional asset slug, or via explicit
 /// leading/trailing slashes. The generator expands the provided value into a deterministic
 /// set of possibilities that can be matched against the collected asset map.
 pub fn generate_asset_candidates(
     layout: &OfflineProjectLayout,
-    module_id: &str,
+    entry_id: &str,
     asset_slug: Option<&str>,
     path: &str,
 ) -> Vec<String> {
@@ -17,11 +17,11 @@ pub fn generate_asset_candidates(
         return Vec::new();
     }
 
-    let mut builder = CandidateBuilder::new(layout, module_id, asset_slug, path);
+    let mut builder = CandidateBuilder::new(layout, entry_id, asset_slug, path);
 
     builder.add_trimmed_candidate();
     builder.add_slug_candidates();
-    builder.add_module_scope_candidates();
+    builder.add_entry_scope_candidates();
 
     builder.finish()
 }
@@ -30,7 +30,7 @@ struct CandidateBuilder<'a> {
     layout: &'a OfflineProjectLayout<'a>,
     original: &'a str,
     trimmed: Option<&'a str>,
-    module: Option<&'a str>,
+    entry: Option<&'a str>,
     slug: Option<&'a str>,
     slug_was_provided: bool,
     seen: BTreeSet<String>,
@@ -40,7 +40,7 @@ struct CandidateBuilder<'a> {
 impl<'a> CandidateBuilder<'a> {
     fn new(
         layout: &'a OfflineProjectLayout<'a>,
-        module_id: &'a str,
+        entry_id: &'a str,
         asset_slug: Option<&'a str>,
         path: &'a str,
     ) -> Self {
@@ -51,11 +51,11 @@ impl<'a> CandidateBuilder<'a> {
             Some(trimmed_value)
         };
 
-        let module_value = module_id.trim_matches('/');
-        let module = if module_value.is_empty() {
+        let entry_value = entry_id.trim_matches('/');
+        let entry = if entry_value.is_empty() {
             None
         } else {
-            Some(module_value)
+            Some(entry_value)
         };
 
         let (slug, slug_was_provided) = match asset_slug {
@@ -74,7 +74,7 @@ impl<'a> CandidateBuilder<'a> {
             layout,
             original: path,
             trimmed,
-            module,
+            entry,
             slug,
             slug_was_provided,
             seen: BTreeSet::new(),
@@ -95,26 +95,26 @@ impl<'a> CandidateBuilder<'a> {
 
         if let Some(slug) = self.slug {
             self.push(format!("{slug}/{path}"));
-            if let Some(module) = self.module {
-                self.push(format!("{module}/{slug}/{path}"));
+            if let Some(entry) = self.entry {
+                self.push(format!("{entry}/{slug}/{path}"));
             }
         } else if self.slug_was_provided {
-            if let Some(module) = self.module {
-                self.push(format!("{module}/{path}"));
+            if let Some(entry) = self.entry {
+                self.push(format!("{entry}/{path}"));
             }
         }
     }
 
-    fn add_module_scope_candidates(&mut self) {
-        let (Some(module), Some(path)) = (self.module, self.trimmed) else {
+    fn add_entry_scope_candidates(&mut self) {
+        let (Some(entry), Some(path)) = (self.entry, self.trimmed) else {
             return;
         };
 
         self.push(format!(
-            "{module}/{}/{}",
-            self.layout.module_assets_dir, path
+            "{entry}/{}/{}",
+            self.layout.entry_assets_dir, path
         ));
-        self.push(format!("{module}/{path}"));
+        self.push(format!("{entry}/{path}"));
     }
 
     fn finish(mut self) -> Vec<String> {
@@ -136,14 +136,14 @@ mod tests {
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",
@@ -154,18 +154,18 @@ mod tests {
     #[test]
     fn returns_empty_for_blank_paths() {
         let layout = layout();
-        assert!(generate_asset_candidates(&layout, "module", None, "").is_empty());
+        assert!(generate_asset_candidates(&layout, "entry", None, "").is_empty());
     }
 
     #[test]
     fn keeps_original_path_when_no_normalisation_possible() {
         let layout = layout();
-        let candidates = generate_asset_candidates(&layout, "module", None, "/");
+        let candidates = generate_asset_candidates(&layout, "entry", None, "/");
         assert_eq!(candidates, vec!["/".to_string()]);
     }
 
     #[test]
-    fn generates_candidates_for_module_and_slug_scopes() {
+    fn generates_candidates_for_entry_and_slug_scopes() {
         let layout = layout();
         let candidates =
             generate_asset_candidates(&layout, "safety", Some("week-1"), "images/photo.png");
@@ -174,7 +174,7 @@ mod tests {
             "images/photo.png".to_string(),
             "week-1/images/photo.png".to_string(),
             "safety/week-1/images/photo.png".to_string(),
-            format!("safety/{}/images/photo.png", layout.module_assets_dir),
+            format!("safety/{}/images/photo.png", layout.entry_assets_dir),
             "safety/images/photo.png".to_string(),
         ]);
     }
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(candidates, vec![
             "docs/intro.md".to_string(),
             "safety/docs/intro.md".to_string(),
-            format!("safety/{}/docs/intro.md", layout.module_assets_dir),
+            format!("safety/{}/docs/intro.md", layout.entry_assets_dir),
         ]);
     }
 }

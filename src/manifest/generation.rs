@@ -7,144 +7,149 @@ use std::path::Path;
 use crate::asset_paths::make_offline_asset_path;
 use crate::builder::BuildResult;
 use crate::manifest::markdown::{
-    collect_markdown_asset_references, extract_first_heading, parse_module_markdown,
+    collect_markdown_asset_references, extract_first_heading, parse_entry_markdown,
     parse_order_from_id, resolve_markdown_assets,
 };
 use crate::manifest::scanning::{collect_assets_recursively, sanitize_const_name};
 use crate::models::{
-    AssetEntry, ManifestGenerationResult, ModuleRecord, OfflineModuleRecord, ProgramCatalogRecord,
-    ProgramMetaRecord,
+    AssetEntry, CollectionCatalogRecord, CollectionMetaRecord, EntryRecord, ManifestGenerationResult,
+    OfflineEntryRecord,
 };
 use crate::project::OfflineProjectLayout;
-use crate::selection::ProgramInclusion;
+use crate::selection::CollectionInclusion;
 
-/// Traverse the authored programs and build the intermediate offline manifest data structure.
-pub fn generate_offline_manifest<S: ProgramInclusion>(
+/// Traverse the authored collections and build the intermediate offline manifest data structure.
+pub fn generate_offline_manifest<S: CollectionInclusion>(
     layout: &OfflineProjectLayout,
-    programs_dir: &Path,
+    collections_dir: &Path,
     selection: &S,
 ) -> BuildResult<ManifestGenerationResult> {
     let mut hero_match_arms = Vec::new();
     let mut asset_map: BTreeMap<(String, String), AssetEntry> = BTreeMap::new();
     let mut used_names = BTreeSet::new();
-    let mut program_catalog: Vec<ProgramCatalogRecord> = Vec::new();
-    let mut offline_modules: Vec<OfflineModuleRecord> = Vec::new();
+    let mut collection_catalog: Vec<CollectionCatalogRecord> = Vec::new();
+    let mut offline_entries: Vec<OfflineEntryRecord> = Vec::new();
     let mut hero_asset_paths: BTreeSet<String> = BTreeSet::new();
 
-    if let Ok(entries) = fs::read_dir(programs_dir) {
+    if let Ok(entries) = fs::read_dir(collections_dir) {
         for entry in entries.flatten() {
             if !entry.file_type().is_ok_and(|ft| ft.is_dir()) {
                 continue;
             }
 
-            let program_id = entry.file_name().to_string_lossy().to_string();
-            if program_id.starts_with('.') {
+            let collection_id = entry.file_name().to_string_lossy().to_string();
+            if collection_id.starts_with('.') {
                 continue;
             }
 
-            if !selection.is_included(&program_id) {
+            if !selection.is_included(&collection_id) {
                 continue;
             }
 
-            let program_json_path = entry.path().join(layout.program_metadata_file);
-            if !program_json_path.exists() {
+            let metadata_path = entry.path().join(layout.collection_metadata_file);
+            if !metadata_path.exists() {
                 continue;
             }
 
-            let json_content = match fs::read_to_string(&program_json_path) {
+            let json_content = match fs::read_to_string(&metadata_path) {
                 Ok(content) => content,
                 Err(_) => continue,
             };
 
-            let meta: ProgramMetaRecord = match serde_json::from_str(&json_content) {
+            let meta: CollectionMetaRecord = match serde_json::from_str(&json_content) {
                 Ok(meta) => meta,
                 Err(_) => continue,
             };
 
-            let program_path = entry.path();
+            let collection_path = entry.path();
 
             collect_assets_recursively(
-                &program_id,
-                &program_path,
+                &collection_id,
+                &collection_path,
                 Path::new(""),
                 false,
                 &mut asset_map,
                 &mut used_names,
-                layout.prod_dir_name,
-                layout.module_assets_dir,
-                layout.module_markdown_file,
-                layout.prod_path_fragment,
-                layout.program_asset_literal_prefix,
-                layout.program_metadata_file,
+                layout.excluded_dir_name,
+                layout.entry_assets_dir,
+                layout.entry_markdown_file,
+                layout.excluded_path_fragment,
+                layout.collection_asset_literal_prefix,
+                layout.collection_metadata_file,
             );
 
             if let Some(hero_image) = meta.hero_image.as_deref() {
                 let hero_rel = hero_image.trim_start_matches('/').replace('\\', "/");
                 if !hero_rel.is_empty() {
                     asset_map
-                        .entry((program_id.clone(), hero_rel.clone()))
+                        .entry((collection_id.clone(), hero_rel.clone()))
                         .or_insert_with(|| {
-                            let const_name =
-                                sanitize_const_name(&program_id, &hero_rel, &used_names);
+                            let const_name = sanitize_const_name(
+                                &collection_id,
+                                &hero_rel,
+                                &used_names,
+                            );
                             used_names.insert(const_name.clone());
                             let asset_path = format!(
                                 "{}/{}/{}",
-                                layout.program_asset_literal_prefix, program_id, hero_rel
+                                layout.collection_asset_literal_prefix, collection_id, hero_rel
                             );
                             AssetEntry {
                                 const_name: const_name.clone(),
                                 literal_path: asset_path,
-                                program_id: program_id.clone(),
+                                collection_id: collection_id.clone(),
                                 relative_path: hero_rel.clone(),
                             }
                         });
 
-                    if let Some(entry) = asset_map.get(&(program_id.clone(), hero_rel.clone())) {
-                        let program_literal = serde_json::to_string(&program_id).unwrap();
+                    if let Some(entry) =
+                        asset_map.get(&(collection_id.clone(), hero_rel.clone()))
+                    {
+                        let collection_literal = serde_json::to_string(&collection_id).unwrap();
                         hero_match_arms.push(format!(
                             "        {} => Some(&{}),",
-                            program_literal, entry.const_name
+                            collection_literal, entry.const_name
                         ));
                         hero_asset_paths.insert(make_offline_asset_path(
                             layout,
-                            &entry.program_id,
+                            &entry.collection_id,
                             &entry.relative_path,
                         ));
                     }
                 }
             }
 
-            let mut module_entries: Vec<(usize, ModuleRecord)> = Vec::new();
+            let mut entry_records: Vec<(usize, EntryRecord)> = Vec::new();
 
-            if let Ok(module_iter) = fs::read_dir(&program_path) {
-                for module_entry in module_iter.flatten() {
-                    let module_path = module_entry.path();
+            if let Ok(entry_iter) = fs::read_dir(&collection_path) {
+                for entry_dir in entry_iter.flatten() {
+                    let entry_path = entry_dir.path();
 
-                    if !module_path.is_dir() {
+                    if !entry_path.is_dir() {
                         continue;
                     }
 
-                    let module_id = module_entry.file_name().to_string_lossy().to_string();
+                    let entry_id = entry_dir.file_name().to_string_lossy().to_string();
 
-                    if module_id.starts_with('.') || module_id == layout.module_assets_dir {
+                    if entry_id.starts_with('.') || entry_id == layout.entry_assets_dir {
                         continue;
                     }
 
-                    let markdown_path = module_path.join(layout.module_markdown_file);
+                    let markdown_path = entry_path.join(layout.entry_markdown_file);
                     if !markdown_path.exists() {
                         continue;
                     }
 
-                    if let Some((frontmatter, body)) = parse_module_markdown(&markdown_path) {
-                        let module_title = frontmatter
+                    if let Some((frontmatter, body)) = parse_entry_markdown(&markdown_path) {
+                        let entry_title = frontmatter
                             .title
                             .clone()
                             .or_else(|| extract_first_heading(&body))
-                            .unwrap_or_else(|| module_id.clone());
+                            .unwrap_or_else(|| entry_id.clone());
 
                         let order = frontmatter
                             .order
-                            .or_else(|| parse_order_from_id(&module_id))
+                            .or_else(|| parse_order_from_id(&entry_id))
                             .unwrap_or(usize::MAX);
 
                         let asset_slug = meta.asset_slug.as_deref();
@@ -154,8 +159,8 @@ pub fn generate_offline_manifest<S: ProgramInclusion>(
                             layout,
                             &references,
                             &asset_map,
-                            &program_id,
-                            &module_id,
+                            &collection_id,
+                            &entry_id,
                             asset_slug,
                         );
 
@@ -163,58 +168,58 @@ pub fn generate_offline_manifest<S: ProgramInclusion>(
                             for unresolved in unresolved_assets {
                                 println!(
                                     "cargo:warning=Unresolved offline asset reference '{}' in {}/{}",
-                                    unresolved, program_id, module_id
+                                    unresolved, collection_id, entry_id
                                 );
                             }
                         }
 
-                        offline_modules.push(OfflineModuleRecord {
-                            program_id: program_id.clone(),
-                            module_id: module_id.clone(),
+                        offline_entries.push(OfflineEntryRecord {
+                            collection_id: collection_id.clone(),
+                            entry_id: entry_id.clone(),
                             body: body.clone(),
                             asset_paths: resolved_assets,
                         });
 
-                        module_entries.push((order, ModuleRecord {
-                            id: module_id.clone(),
-                            title: module_title,
+                        entry_records.push((order, EntryRecord {
+                            id: entry_id.clone(),
+                            title: entry_title,
                             section: frontmatter.section.clone(),
                             sequence: order,
                             source: format!(
                                 "{}/{}/{}",
-                                program_id, module_id, layout.module_markdown_file
+                                collection_id, entry_id, layout.entry_markdown_file
                             ),
                         }));
                     }
                 }
             }
 
-            module_entries.sort_by(|(order_a, module_a), (order_b, module_b)| {
+            entry_records.sort_by(|(order_a, entry_a), (order_b, entry_b)| {
                 order_a
                     .cmp(order_b)
-                    .then_with(|| module_a.id.cmp(&module_b.id))
+                    .then_with(|| entry_a.id.cmp(&entry_b.id))
             });
 
-            let modules: Vec<ModuleRecord> = module_entries
+            let entries: Vec<EntryRecord> = entry_records
                 .into_iter()
                 .enumerate()
-                .map(|(index, (_, mut module))| {
-                    module.sequence = index + 1;
-                    module
+                .map(|(index, (_, mut entry))| {
+                    entry.sequence = index + 1;
+                    entry
                 })
                 .collect();
 
-            program_catalog.push(ProgramCatalogRecord {
-                id: program_id,
+            collection_catalog.push(CollectionCatalogRecord {
+                id: collection_id,
                 meta,
-                modules,
+                entries,
             });
         }
     }
 
     Ok(ManifestGenerationResult {
-        program_catalog,
-        offline_modules,
+        collection_catalog,
+        offline_entries,
         asset_map,
         hero_asset_paths,
         hero_match_arms,
@@ -225,25 +230,25 @@ pub fn generate_offline_manifest<S: ProgramInclusion>(
 mod tests {
     use super::*;
     use crate::project::OfflineProjectLayout;
-    use crate::selection::ProgramInclusion;
+    use crate::selection::CollectionInclusion;
     use tempfile::tempdir;
 
-    impl ProgramInclusion for () {
-        fn is_included(&self, _program_id: &str) -> bool {
+    impl CollectionInclusion for () {
+        fn is_included(&self, _collection_id: &str) -> bool {
             true
         }
     }
 
     fn layout() -> OfflineProjectLayout<'static> {
         OfflineProjectLayout {
-            module_assets_dir: "assets",
-            module_markdown_file: "index.md",
-            program_metadata_file: "program.json",
-            prod_dir_name: "prod",
-            prod_path_fragment: "/prod/",
-            program_asset_literal_prefix: "/content/programs",
+            entry_assets_dir: "assets",
+            entry_markdown_file: "index.md",
+            collection_metadata_file: "program.json",
+            excluded_dir_name: "prod",
+            excluded_path_fragment: "/prod/",
+            collection_asset_literal_prefix: "/content/programs",
             offline_site_root: "site",
-            programs_dir_name: "programs",
+            collections_dir_name: "programs",
             offline_bundle_root: "target/offline-html",
             index_html_file: "index.html",
             target_dir: "target",
@@ -259,39 +264,39 @@ mod tests {
     }
 
     #[test]
-    fn generates_catalog_and_offline_modules() {
+    fn generates_catalog_and_offline_entries() {
         let dir = tempdir().unwrap();
-        let programs_dir = dir.path();
+        let collections_dir = dir.path();
 
-        let program_dir = programs_dir.join("p001-intro");
-        fs::create_dir_all(program_dir.join("assets"));
+        let collection_dir = collections_dir.join("p001-intro");
+        fs::create_dir_all(collection_dir.join("assets"));
 
         write_file(
-            &program_dir.join("program.json"),
+            &collection_dir.join("program.json"),
             r#"{"title":"Intro","assetSlug":"intro","heroImage":"/assets/cover.png"}"#,
         );
-        write_file(&program_dir.join("assets/cover.png"), "hero");
+        write_file(&collection_dir.join("assets/cover.png"), "hero");
         write_file(
-            &program_dir.join("001-welcome/index.md"),
+            &collection_dir.join("001-welcome/index.md"),
             "---\ntitle: Welcome\n---\n![Alt](image.png)\n",
         );
-        write_file(&program_dir.join("001-welcome/assets/image.png"), "image");
+        write_file(&collection_dir.join("001-welcome/assets/image.png"), "image");
 
         let layout = layout();
         let selection = ();
-        let result = generate_offline_manifest(&layout, programs_dir, &selection).unwrap();
+        let result = generate_offline_manifest(&layout, collections_dir, &selection).unwrap();
 
-        assert_eq!(result.program_catalog.len(), 1);
-        let program = &result.program_catalog[0];
-        assert_eq!(program.id, "p001-intro");
-        assert_eq!(program.modules.len(), 1);
-        assert_eq!(program.modules[0].id, "001-welcome");
-        assert_eq!(program.modules[0].sequence, 1);
+        assert_eq!(result.collection_catalog.len(), 1);
+        let collection = &result.collection_catalog[0];
+        assert_eq!(collection.id, "p001-intro");
+        assert_eq!(collection.entries.len(), 1);
+        assert_eq!(collection.entries[0].id, "001-welcome");
+        assert_eq!(collection.entries[0].sequence, 1);
 
-        assert_eq!(result.offline_modules.len(), 1);
-        let offline = &result.offline_modules[0];
-        assert_eq!(offline.program_id, "p001-intro");
-        assert_eq!(offline.module_id, "001-welcome");
+        assert_eq!(result.offline_entries.len(), 1);
+        let offline = &result.offline_entries[0];
+        assert_eq!(offline.collection_id, "p001-intro");
+        assert_eq!(offline.entry_id, "001-welcome");
         assert_eq!(offline.asset_paths.len(), 1);
 
         assert!(
