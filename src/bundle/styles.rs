@@ -19,7 +19,7 @@ fn ensure_tailwind_alias(layout: &OfflineProjectLayout, site_root: &Path) -> Res
         return Ok(());
     }
 
-    let assets_dir = site_root.join(layout.entry_assets_dir);
+    let assets_dir = site_root.join(layout.entry_assets_dir());
     let Some(source) = find_hashed_stylesheet(&assets_dir, "tailwind")? else {
         return Err(anyhow!(
             "failed to locate hashed tailwind stylesheet in {}",
@@ -102,7 +102,7 @@ fn is_compiled_tailwind(path: &Path) -> Result<bool> {
 }
 
 fn find_debug_tailwind_stylesheet(layout: &OfflineProjectLayout) -> Result<Option<PathBuf>> {
-    let dx_root = Path::new(layout.target_dir).join("dx");
+    let dx_root = Path::new(&layout.target_dir).join("dx");
     if !dx_root.is_dir() {
         return Ok(None);
     }
@@ -130,20 +130,20 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    fn layout() -> OfflineProjectLayout<'static> {
+    fn layout() -> OfflineProjectLayout {
         OfflineProjectLayout {
-            entry_assets_dir: "assets",
-            entry_markdown_file: "index.md",
-            collection_metadata_file: "program.json",
-            excluded_dir_name: "prod",
-            excluded_path_fragment: "/prod/",
-            collection_asset_literal_prefix: "/content/programs",
-            offline_site_root: "site",
-            collections_dir_name: "programs",
-            offline_bundle_root: "target/offline-html",
-            index_html_file: "index.html",
-            target_dir: "target",
-            offline_manifest_json: "offline_manifest.json",
+            entry_assets_dir: "assets".into(),
+            entry_markdown_file: "index.md".into(),
+            collection_metadata_file: "collection.json".into(),
+            excluded_dir_name: "prod".into(),
+            excluded_path_fragment: "/prod/".into(),
+            collection_asset_literal_prefix: "/content/programs".into(),
+            offline_site_root: "site".into(),
+            collections_dir_name: "programs".into(),
+            offline_bundle_root: "target/offline-html".into(),
+            index_html_file: "index.html".into(),
+            target_dir: "target".into(),
+            offline_manifest_json: "offline_manifest.json".into(),
         }
     }
 

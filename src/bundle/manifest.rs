@@ -18,7 +18,6 @@ pub struct OfflineManifest {
     #[serde(default)]
     pub hero_assets: Vec<String>,
     /// Entries discovered during the build.
-    #[serde(default)]
     pub entries: Vec<OfflineEntry>,
 }
 
@@ -26,10 +25,8 @@ pub struct OfflineManifest {
 #[derive(Debug, Deserialize)]
 pub struct OfflineEntry {
     /// Collection identifier the entry belongs to.
-    #[serde(default)]
     pub collection_id: String,
     /// Entry identifier within the collection.
-    #[serde(default)]
     pub entry_id: String,
     /// Asset paths referenced by the entry body.
     #[serde(default)]
@@ -50,11 +47,11 @@ pub fn resolve_site_root(
     layout: &OfflineProjectLayout,
     manifest: &OfflineManifest,
 ) -> (PathBuf, String) {
-    let offline_root = PathBuf::from(layout.offline_bundle_root);
+    let offline_root = PathBuf::from(&layout.offline_bundle_root);
     let site_raw = manifest
         .site_root
         .as_deref()
-        .unwrap_or(layout.offline_site_root);
+        .unwrap_or(layout.offline_site_root.as_str());
     let segments: Vec<&str> = site_raw
         .split('/')
         .filter(|segment| !segment.is_empty())
@@ -76,20 +73,20 @@ pub fn resolve_site_root(
 mod tests {
     use super::*;
 
-    fn layout() -> OfflineProjectLayout<'static> {
+    fn layout() -> OfflineProjectLayout {
         OfflineProjectLayout {
-            entry_assets_dir: "assets",
-            entry_markdown_file: "index.md",
-            collection_metadata_file: "program.json",
-            excluded_dir_name: "prod",
-            excluded_path_fragment: "/prod/",
-            collection_asset_literal_prefix: "/content/programs",
-            offline_site_root: "site",
-            collections_dir_name: "programs",
-            offline_bundle_root: "target/offline-html",
-            index_html_file: "index.html",
-            target_dir: "target",
-            offline_manifest_json: "offline_manifest.json",
+            entry_assets_dir: "assets".into(),
+            entry_markdown_file: "index.md".into(),
+            collection_metadata_file: "collection.json".into(),
+            excluded_dir_name: "prod".into(),
+            excluded_path_fragment: "/prod/".into(),
+            collection_asset_literal_prefix: "/content/programs".into(),
+            offline_site_root: "site".into(),
+            collections_dir_name: "programs".into(),
+            offline_bundle_root: "target/offline-html".into(),
+            index_html_file: "index.html".into(),
+            target_dir: "target".into(),
+            offline_manifest_json: "offline_manifest.json".into(),
         }
     }
 

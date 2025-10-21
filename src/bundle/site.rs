@@ -31,11 +31,11 @@ pub fn patch_site_index(
     layout: &OfflineProjectLayout,
     site_root: &Path,
 ) -> Result<(String, String)> {
-    let index_path = site_root.join(layout.index_html_file);
+    let index_path = site_root.join(&layout.index_html_file);
     let mut text = fs::read_to_string(&index_path)
         .with_context(|| format!("failed to read {}", index_path.display()))?;
 
-    let assets_prefix = format!("{}/", layout.entry_assets_dir);
+    let assets_prefix = format!("{}/", layout.entry_assets_dir());
     text = text.replace(&format!("/./{}", assets_prefix), &assets_prefix);
 
     let escaped_assets_prefix = regex::escape(&assets_prefix);
@@ -65,7 +65,7 @@ pub fn patch_site_index(
         .map(|m| m.as_str().to_string())
         .ok_or_else(|| anyhow!("failed to extract wasm module name"))?;
 
-    let escaped_assets_dir = regex::escape(layout.entry_assets_dir);
+    let escaped_assets_dir = regex::escape(layout.entry_assets_dir());
     let preload_pattern = Regex::new(&format!(
         r#"(?i)<link[^>]*rel="preload"[^>]*{}/[^>]+>"#,
         escaped_assets_dir
@@ -97,20 +97,20 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    fn layout() -> OfflineProjectLayout<'static> {
+    fn layout() -> OfflineProjectLayout {
         OfflineProjectLayout {
-            entry_assets_dir: "assets",
-            entry_markdown_file: "index.md",
-            collection_metadata_file: "program.json",
-            excluded_dir_name: "prod",
-            excluded_path_fragment: "/prod/",
-            collection_asset_literal_prefix: "/content/programs",
-            offline_site_root: "site",
-            collections_dir_name: "programs",
-            offline_bundle_root: "target/offline-html",
-            index_html_file: "index.html",
-            target_dir: "target",
-            offline_manifest_json: "offline_manifest.json",
+            entry_assets_dir: "assets".into(),
+            entry_markdown_file: "index.md".into(),
+            collection_metadata_file: "collection.json".into(),
+            excluded_dir_name: "prod".into(),
+            excluded_path_fragment: "/prod/".into(),
+            collection_asset_literal_prefix: "/content/programs".into(),
+            offline_site_root: "site".into(),
+            collections_dir_name: "programs".into(),
+            offline_bundle_root: "target/offline-html".into(),
+            index_html_file: "index.html".into(),
+            target_dir: "target".into(),
+            offline_manifest_json: "offline_manifest.json".into(),
         }
     }
 

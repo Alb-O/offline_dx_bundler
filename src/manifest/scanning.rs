@@ -146,7 +146,7 @@ mod tests {
         let collection_dir = root.join("collection");
         fs::create_dir_all(collection_dir.join("entries/entry-one/assets"));
 
-        fs::write(collection_dir.join("program.json"), "{}").unwrap();
+        fs::write(collection_dir.join("collection.json"), "{}").unwrap();
         fs::write(collection_dir.join("entries/entry-one/index.md"), "content").unwrap();
         fs::write(
             collection_dir.join("entries/entry-one/assets/image.png"),
@@ -168,10 +168,10 @@ mod tests {
             "index.md",
             "/prod/",
             "/content/programs",
-            "program.json",
+            "collection.json",
         );
 
-        assert!(asset_map.contains_key(&("collection".into(), "program.json".into())));
+        assert!(asset_map.contains_key(&("collection".into(), "collection.json".into())));
         assert!(asset_map.contains_key(&(
             "collection".into(),
             "entries/entry-one/index.md".into()

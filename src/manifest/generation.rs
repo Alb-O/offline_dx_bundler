@@ -46,7 +46,7 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                 continue;
             }
 
-            let metadata_path = entry.path().join(layout.collection_metadata_file);
+            let metadata_path = entry.path().join(&layout.collection_metadata_file);
             if !metadata_path.exists() {
                 continue;
             }
@@ -70,12 +70,12 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                 false,
                 &mut asset_map,
                 &mut used_names,
-                layout.excluded_dir_name,
-                layout.entry_assets_dir,
-                layout.entry_markdown_file,
-                layout.excluded_path_fragment,
-                layout.collection_asset_literal_prefix,
-                layout.collection_metadata_file,
+                &layout.excluded_dir_name,
+                &layout.entry_assets_dir,
+                &layout.entry_markdown_file,
+                &layout.excluded_path_fragment,
+                &layout.collection_asset_literal_prefix,
+                layout.collection_metadata_file.as_str(),
             );
 
             if let Some(hero_image) = meta.hero_image.as_deref() {
@@ -92,7 +92,9 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                             used_names.insert(const_name.clone());
                             let asset_path = format!(
                                 "{}/{}/{}",
-                                layout.collection_asset_literal_prefix, collection_id, hero_rel
+                                layout.collection_asset_literal_prefix.as_str(),
+                                collection_id,
+                                hero_rel
                             );
                             AssetEntry {
                                 const_name: const_name.clone(),
@@ -135,7 +137,7 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
                         continue;
                     }
 
-                    let markdown_path = entry_path.join(layout.entry_markdown_file);
+                    let markdown_path = entry_path.join(&layout.entry_markdown_file);
                     if !markdown_path.exists() {
                         continue;
                     }
@@ -239,20 +241,20 @@ mod tests {
         }
     }
 
-    fn layout() -> OfflineProjectLayout<'static> {
+    fn layout() -> OfflineProjectLayout {
         OfflineProjectLayout {
-            entry_assets_dir: "assets",
-            entry_markdown_file: "index.md",
-            collection_metadata_file: "program.json",
-            excluded_dir_name: "prod",
-            excluded_path_fragment: "/prod/",
-            collection_asset_literal_prefix: "/content/programs",
-            offline_site_root: "site",
-            collections_dir_name: "programs",
-            offline_bundle_root: "target/offline-html",
-            index_html_file: "index.html",
-            target_dir: "target",
-            offline_manifest_json: "offline_manifest.json",
+            entry_assets_dir: "assets".into(),
+            entry_markdown_file: "index.md".into(),
+            collection_metadata_file: "collection.json".into(),
+            excluded_dir_name: "prod".into(),
+            excluded_path_fragment: "/prod/".into(),
+            collection_asset_literal_prefix: "/content/programs".into(),
+            offline_site_root: "site".into(),
+            collections_dir_name: "programs".into(),
+            offline_bundle_root: "target/offline-html".into(),
+            index_html_file: "index.html".into(),
+            target_dir: "target".into(),
+            offline_manifest_json: "offline_manifest.json".into(),
         }
     }
 
@@ -272,7 +274,7 @@ mod tests {
         fs::create_dir_all(collection_dir.join("assets"));
 
         write_file(
-            &collection_dir.join("program.json"),
+            &collection_dir.join("collection.json"),
             r#"{"title":"Intro","assetSlug":"intro","heroImage":"/assets/cover.png"}"#,
         );
         write_file(&collection_dir.join("assets/cover.png"), "hero");

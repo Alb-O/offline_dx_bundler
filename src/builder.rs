@@ -56,7 +56,7 @@ impl<'a> OfflineBuilder<'a> {
 
         self.prepare_collection_asset_sources(&asset_map)?;
 
-        let layout = self.context.layout;
+        let layout = &self.context.layout;
         let mirror_base = &self.context.asset_mirror_dir;
         let mirror_relative = match mirror_base.strip_prefix(self.context.manifest_dir) {
             Ok(path) => path,
@@ -103,7 +103,7 @@ pub(crate) fn get_collection_asset(collection_id: &str, relative_path: &str) -> 
         );
 
         let (offline_entry_code, offline_asset_code) =
-            render_offline_entry_tables(&layout, &offline_entries, &asset_map);
+            render_offline_entry_tables(layout, &offline_entries, &asset_map);
 
         let offline_manifest_code = format!(
             r#"// Generated at build time for the offline-html feature
@@ -143,7 +143,7 @@ pub(crate) fn offline_collection_asset(collection_id: &str, relative_path: &str)
         );
 
         let offline_manifest_json = serde_json::to_string_pretty(&OfflineManifestSummary {
-            site_root: layout.offline_site_root.to_string(),
+            site_root: layout.offline_site_root.clone(),
             entries: offline_entries
                 .iter()
                 .map(|entry| OfflineEntrySummary {
@@ -159,11 +159,7 @@ pub(crate) fn offline_collection_asset(collection_id: &str, relative_path: &str)
 
         let mut rerun_paths = vec![self.context.collections_dir.to_path_buf()];
         rerun_paths.push(self.context.collections_local_path.to_path_buf());
-        append_collection_metadata_paths(
-            self.context.collections_dir,
-            layout.collection_metadata_file,
-            &mut rerun_paths,
-        );
+        append_collection_metadata_paths(self.context.collections_dir, &layout, &mut rerun_paths);
 
         Ok(OfflineArtifacts {
             asset_table_code,
@@ -220,13 +216,13 @@ pub(crate) fn offline_collection_asset(collection_id: &str, relative_path: &str)
 
 fn append_collection_metadata_paths(
     collections_dir: &Path,
-    metadata_file: &str,
+    layout: &OfflineProjectLayout,
     rerun_paths: &mut Vec<PathBuf>,
 ) {
     if let Ok(entries) = fs::read_dir(collections_dir) {
         for entry in entries.flatten() {
             if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
-                let metadata = entry.path().join(metadata_file);
+                let metadata = entry.path().join(&layout.collection_metadata_file);
                 if metadata.exists() {
                     rerun_paths.push(metadata);
                 }
@@ -468,20 +464,20 @@ mod tests {
         }
     }
 
-    fn layout() -> OfflineProjectLayout<'static> {
+    fn layout() -> OfflineProjectLayout {
         OfflineProjectLayout {
-            entry_assets_dir: "assets",
-            entry_markdown_file: "index.md",
-            collection_metadata_file: "program.json",
-            excluded_dir_name: "prod",
-            excluded_path_fragment: "/prod/",
-            collection_asset_literal_prefix: "/content/programs",
-            offline_site_root: "site",
-            collections_dir_name: "programs",
-            offline_bundle_root: "target/offline-html",
-            index_html_file: "index.html",
-            target_dir: "target",
-            offline_manifest_json: "offline_manifest.json",
+            entry_assets_dir: "assets".into(),
+            entry_markdown_file: "index.md".into(),
+            collection_metadata_file: "collection.json".into(),
+            excluded_dir_name: "prod".into(),
+            excluded_path_fragment: "/prod/".into(),
+            collection_asset_literal_prefix: "/content/programs".into(),
+            offline_site_root: "site".into(),
+            collections_dir_name: "programs".into(),
+            offline_bundle_root: "target/offline-html".into(),
+            index_html_file: "index.html".into(),
+            target_dir: "target".into(),
+            offline_manifest_json: "offline_manifest.json".into(),
         }
     }
 

@@ -27,7 +27,7 @@ pub fn generate_asset_candidates(
 }
 
 struct CandidateBuilder<'a> {
-    layout: &'a OfflineProjectLayout<'a>,
+    layout: &'a OfflineProjectLayout,
     original: &'a str,
     trimmed: Option<&'a str>,
     entry: Option<&'a str>,
@@ -39,7 +39,7 @@ struct CandidateBuilder<'a> {
 
 impl<'a> CandidateBuilder<'a> {
     fn new(
-        layout: &'a OfflineProjectLayout<'a>,
+        layout: &'a OfflineProjectLayout,
         entry_id: &'a str,
         asset_slug: Option<&'a str>,
         path: &'a str,
@@ -112,7 +112,7 @@ impl<'a> CandidateBuilder<'a> {
 
         self.push(format!(
             "{entry}/{}/{}",
-            self.layout.entry_assets_dir, path
+            self.layout.entry_assets_dir(), path
         ));
         self.push(format!("{entry}/{path}"));
     }
@@ -134,20 +134,20 @@ mod tests {
     use super::generate_asset_candidates;
     use crate::project::OfflineProjectLayout;
 
-    fn layout() -> OfflineProjectLayout<'static> {
+    fn layout() -> OfflineProjectLayout {
         OfflineProjectLayout {
-            entry_assets_dir: "assets",
-            entry_markdown_file: "index.md",
-            collection_metadata_file: "program.json",
-            excluded_dir_name: "prod",
-            excluded_path_fragment: "/prod/",
-            collection_asset_literal_prefix: "/content/programs",
-            offline_site_root: "site",
-            collections_dir_name: "programs",
-            offline_bundle_root: "target/offline-html",
-            index_html_file: "index.html",
-            target_dir: "target",
-            offline_manifest_json: "offline_manifest.json",
+            entry_assets_dir: "assets".into(),
+            entry_markdown_file: "index.md".into(),
+            collection_metadata_file: "collection.json".into(),
+            excluded_dir_name: "prod".into(),
+            excluded_path_fragment: "/prod/".into(),
+            collection_asset_literal_prefix: "/content/programs".into(),
+            offline_site_root: "site".into(),
+            collections_dir_name: "programs".into(),
+            offline_bundle_root: "target/offline-html".into(),
+            index_html_file: "index.html".into(),
+            target_dir: "target".into(),
+            offline_manifest_json: "offline_manifest.json".into(),
         }
     }
 
@@ -174,7 +174,7 @@ mod tests {
             "images/photo.png".to_string(),
             "week-1/images/photo.png".to_string(),
             "safety/week-1/images/photo.png".to_string(),
-            format!("safety/{}/images/photo.png", layout.entry_assets_dir),
+            format!("safety/{}/images/photo.png", layout.entry_assets_dir()),
             "safety/images/photo.png".to_string(),
         ]);
     }
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(candidates, vec![
             "docs/intro.md".to_string(),
             "safety/docs/intro.md".to_string(),
-            format!("safety/{}/docs/intro.md", layout.entry_assets_dir),
+            format!("safety/{}/docs/intro.md", layout.entry_assets_dir()),
         ]);
     }
 }

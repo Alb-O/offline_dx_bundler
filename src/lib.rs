@@ -7,6 +7,7 @@ pub mod asset_paths;
 pub mod builder;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod bundle;
+pub mod config;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod manifest;
 pub mod models;

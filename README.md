@@ -28,18 +28,18 @@ impl CollectionInclusion for IncludeAll {
 
 fn main() -> anyhow::Result<()> {
     let layout = OfflineProjectLayout {
-        entry_assets_dir: "assets",
-        entry_markdown_file: "index.md",
-        collection_metadata_file: "program.json",
-        excluded_dir_name: "prod",
-        excluded_path_fragment: "/prod/",
-        collection_asset_literal_prefix: "/content/programs",
-        offline_site_root: "site",
-        collections_dir_name: "programs",
-        offline_bundle_root: "target/offline-html",
-        index_html_file: "index.html",
-        target_dir: "target",
-        offline_manifest_json: "offline_manifest.json",
+        entry_assets_dir: "assets".into(),
+        entry_markdown_file: "index.md".into(),
+        collection_metadata_file: "collection.json".into(),
+        excluded_dir_name: "prod".into(),
+        excluded_path_fragment: "/prod/".into(),
+        collection_asset_literal_prefix: "/content/programs".into(),
+        offline_site_root: "site".into(),
+        collections_dir_name: "programs".into(),
+        offline_bundle_root: "target/offline-html".into(),
+        index_html_file: "index.html".into(),
+        target_dir: "target".into(),
+        offline_manifest_json: "offline_manifest.json".into(),
     };
 
     let manifest_dir = Path::new("./rs");
@@ -62,6 +62,22 @@ fn main() -> anyhow::Result<()> {
 ```
 
 The resulting [`OfflineArtifacts`](https://docs.rs/offline_dx_bundler/latest/offline_dx_bundler/struct.OfflineArtifacts.html) structure contains ready-to-write strings for the generated Rust modules and the offline manifest JSON file.
+
+### Runtime configuration
+
+To avoid hard-coding every path, you can drop an `offline.config.json` file next to your Cargo manifest. Any fields you omit fall back to the defaults shown below:
+
+```json
+{
+  "collections_dir": "../content/programs",
+  "collections_local_path": "collections.local.json",
+  "entry_assets_dir": "assets",
+  "entry_markdown_file": "index.md",
+  "collection_metadata_file": "collection.json"
+}
+```
+
+The build helper automatically loads this file and converts it into the layout used by the bundler.
 
 ## Examples
 
