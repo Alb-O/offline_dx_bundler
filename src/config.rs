@@ -12,6 +12,8 @@ use crate::project::OfflineProjectLayout;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ProjectConfig {
+  /// Name of the main cargo package for build output paths.
+  pub package_name: String,
   /// Relative path from the manifest directory to the authored collections.
   pub collections_dir: String,
   /// Optional JSON file describing which collections to include in builds.
@@ -46,6 +48,9 @@ pub struct ProjectConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionConfigOverrides {
+  /// Name of the main cargo package for build output paths.
+  #[serde(default)]
+  pub package_name: Option<String>,
   /// Relative path from the manifest directory to the authored collections.
   #[serde(default)]
   pub collections_dir: Option<String>,
@@ -93,6 +98,7 @@ pub struct CollectionConfigOverrides {
 impl Default for ProjectConfig {
   fn default() -> Self {
     Self {
+      package_name: "hello-world".into(),
       collections_dir: "../content/programs".into(),
       collections_local_path: "collections.local.json".into(),
       entry_assets_dir: "assets".into(),
