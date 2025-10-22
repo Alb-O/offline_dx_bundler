@@ -13,7 +13,8 @@ use crate::manifest::markdown::{
 };
 use crate::manifest::scanning::{collect_assets_recursively, sanitize_const_name};
 use crate::models::{
-  AssetEntry, CollectionCatalogRecord, CollectionMetaRecord, EntryRecord, ManifestGenerationResult,
+  AssetCollectionContext, AssetEntry, AssetScanningConfig, CollectionCatalogRecord,
+  CollectionMetaRecord, EntryRecord, ManifestGenerationContext, ManifestGenerationResult,
   OfflineEntryRecord,
 };
 use crate::project::OfflineProjectLayout;
@@ -32,6 +33,19 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
   let mut offline_entries: Vec<OfflineEntryRecord> = Vec::new();
   let mut hero_asset_paths: BTreeSet<String> = BTreeSet::new();
 
+  let assets_context = AssetCollectionContext {
+    asset_map: &mut asset_map,
+    used_names: &mut used_names,
+    hero_asset_paths: &mut hero_asset_paths,
+    hero_match_arms: &mut hero_match_arms,
+  };
+
+  let mut manifest_context = ManifestGenerationContext {
+    assets: assets_context,
+    collection_catalog: &mut collection_catalog,
+    offline_entries: &mut offline_entries,
+  };
+
   if let Ok(entries) = fs::read_dir(collections_dir) {
     for entry in entries.flatten() {
       if !entry.file_type().is_ok_and(|ft| ft.is_dir()) {
@@ -49,12 +63,7 @@ pub fn generate_offline_manifest<S: CollectionInclusion>(
         &collection_path,
         &collection_name,
         selection,
-        &mut asset_map,
-        &mut used_names,
-        &mut hero_match_arms,
-        &mut hero_asset_paths,
-        &mut collection_catalog,
-        &mut offline_entries,
+        &mut manifest_context,
       );
     }
   }
@@ -73,12 +82,7 @@ fn walk_collection_tree<S: CollectionInclusion>(
   collection_path: &Path,
   collection_id: &str,
   selection: &S,
-  asset_map: &mut BTreeMap<(String, String), AssetEntry>,
-  used_names: &mut BTreeSet<String>,
-  hero_match_arms: &mut Vec<String>,
-  hero_asset_paths: &mut BTreeSet<String>,
-  collection_catalog: &mut Vec<CollectionCatalogRecord>,
-  offline_entries: &mut Vec<OfflineEntryRecord>,
+  context: &mut ManifestGenerationContext,
 ) {
   let metadata_path = collection_path.join(&parent_layout.collection_metadata_file);
   let mut collection_layout = parent_layout.clone();
@@ -92,29 +96,36 @@ fn walk_collection_tree<S: CollectionInclusion>(
   if let Some(meta) = meta
     && selection.is_included(collection_id)
   {
+    let scanning_config = AssetScanningConfig {
+      excluded_dir_name: &collection_layout.excluded_dir_name,
+      entry_assets_dir: &collection_layout.entry_assets_dir,
+      entry_markdown_file: &collection_layout.entry_markdown_file,
+      excluded_path_fragment: &collection_layout.excluded_path_fragment,
+      collection_asset_literal_prefix: &collection_layout.collection_asset_literal_prefix,
+      collection_metadata_file: collection_layout.collection_metadata_file.as_str(),
+    };
+
     collect_assets_recursively(
       collection_id,
       collection_path,
       Path::new(""),
       false,
-      asset_map,
-      used_names,
-      &collection_layout.excluded_dir_name,
-      &collection_layout.entry_assets_dir,
-      &collection_layout.entry_markdown_file,
-      &collection_layout.excluded_path_fragment,
-      &collection_layout.collection_asset_literal_prefix,
-      collection_layout.collection_metadata_file.as_str(),
+      context.assets.asset_map,
+      context.assets.used_names,
+      &scanning_config,
     );
 
     if let Some(hero_image) = meta.hero_image.as_deref() {
       let hero_rel = hero_image.trim_start_matches('/').replace('\\', "/");
       if !hero_rel.is_empty() {
-        asset_map
+        context
+          .assets
+          .asset_map
           .entry((collection_id.to_string(), hero_rel.clone()))
           .or_insert_with(|| {
-            let const_name = sanitize_const_name(collection_id, &hero_rel, used_names);
-            used_names.insert(const_name.clone());
+            let const_name =
+              sanitize_const_name(collection_id, &hero_rel, context.assets.used_names);
+            context.assets.used_names.insert(const_name.clone());
             let asset_path = format!(
               "{}/{}/{}",
               collection_layout.collection_asset_literal_prefix.as_str(),
@@ -129,17 +140,24 @@ fn walk_collection_tree<S: CollectionInclusion>(
             }
           });
 
-        if let Some(entry) = asset_map.get(&(collection_id.to_string(), hero_rel.clone())) {
+        if let Some(entry) = context
+          .assets
+          .asset_map
+          .get(&(collection_id.to_string(), hero_rel.clone()))
+        {
           let collection_literal = serde_json::to_string(collection_id).unwrap();
-          hero_match_arms.push(format!(
+          context.assets.hero_match_arms.push(format!(
             "        {} => Some(&{}),",
             collection_literal, entry.const_name
           ));
-          hero_asset_paths.insert(make_offline_asset_path(
-            &collection_layout,
-            &entry.collection_id,
-            &entry.relative_path,
-          ));
+          context
+            .assets
+            .hero_asset_paths
+            .insert(make_offline_asset_path(
+              &collection_layout,
+              &entry.collection_id,
+              &entry.relative_path,
+            ));
         }
       }
     }
@@ -183,7 +201,7 @@ fn walk_collection_tree<S: CollectionInclusion>(
           let (resolved_assets, unresolved_assets) = resolve_markdown_assets(
             &collection_layout,
             &references,
-            asset_map,
+            context.assets.asset_map,
             collection_id,
             &entry_id,
             asset_slug,
@@ -198,7 +216,7 @@ fn walk_collection_tree<S: CollectionInclusion>(
             }
           }
 
-          offline_entries.push(OfflineEntryRecord {
+          context.offline_entries.push(OfflineEntryRecord {
             collection_id: collection_id.to_string(),
             entry_id: entry_id.clone(),
             body: body.clone(),
@@ -234,7 +252,7 @@ fn walk_collection_tree<S: CollectionInclusion>(
       })
       .collect();
 
-    collection_catalog.push(CollectionCatalogRecord {
+    context.collection_catalog.push(CollectionCatalogRecord {
       id: collection_id.to_string(),
       meta,
       entries,
@@ -271,12 +289,7 @@ fn walk_collection_tree<S: CollectionInclusion>(
         &child_path,
         &child_id,
         selection,
-        asset_map,
-        used_names,
-        hero_match_arms,
-        hero_asset_paths,
-        collection_catalog,
-        offline_entries,
+        context,
       );
     }
   }

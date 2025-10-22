@@ -121,6 +121,47 @@ pub struct OfflineManifestSummary {
   pub hero_assets: Vec<String>,
 }
 
+/// Context for asset collection operations.
+#[derive(Debug)]
+pub struct AssetCollectionContext<'a> {
+  /// Mapping of collection and relative path to offline asset entries.
+  pub asset_map: &'a mut BTreeMap<(String, String), AssetEntry>,
+  /// Set of used constant names for deduplication.
+  pub used_names: &'a mut BTreeSet<String>,
+  /// Hero assets collected while scanning collection metadata.
+  pub hero_asset_paths: &'a mut BTreeSet<String>,
+  /// Match arms used to generate hero asset lookup code.
+  pub hero_match_arms: &'a mut Vec<String>,
+}
+
+/// Context for manifest generation operations.
+#[derive(Debug)]
+pub struct ManifestGenerationContext<'a> {
+  /// Asset collection context.
+  pub assets: AssetCollectionContext<'a>,
+  /// Records describing the discovered collections and entries.
+  pub collection_catalog: &'a mut Vec<CollectionCatalogRecord>,
+  /// Complete representation of entries required for the offline bundle.
+  pub offline_entries: &'a mut Vec<OfflineEntryRecord>,
+}
+
+/// Configuration for asset scanning operations.
+#[derive(Debug, Clone)]
+pub struct AssetScanningConfig<'a> {
+  /// Name of directories to exclude from scanning.
+  pub excluded_dir_name: &'a str,
+  /// Name of entry assets directory.
+  pub entry_assets_dir: &'a str,
+  /// Name of entry markdown file.
+  pub entry_markdown_file: &'a str,
+  /// Path fragment to exclude from asset paths.
+  pub excluded_path_fragment: &'a str,
+  /// Prefix for collection asset literal paths.
+  pub collection_asset_literal_prefix: &'a str,
+  /// Name of collection metadata file.
+  pub collection_metadata_file: &'a str,
+}
+
 /// Complete manifest generation output returned by [`crate::OfflineBuilder`].
 #[derive(Debug)]
 pub struct ManifestGenerationResult {

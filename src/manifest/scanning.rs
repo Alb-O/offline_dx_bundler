@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::models::AssetEntry;
+use crate::models::{AssetEntry, AssetScanningConfig};
 
 /// Walk the collection directory collecting asset entries and generated constant names.
 pub fn collect_assets_recursively(
@@ -14,12 +14,7 @@ pub fn collect_assets_recursively(
   in_assets_tree: bool,
   asset_map: &mut BTreeMap<(String, String), AssetEntry>,
   used_names: &mut BTreeSet<String>,
-  excluded_dir_name: &str,
-  entry_assets_dir: &str,
-  entry_markdown_file: &str,
-  excluded_path_fragment: &str,
-  collection_asset_literal_prefix: &str,
-  collection_metadata_file: &str,
+  config: &AssetScanningConfig,
 ) {
   if let Ok(entries) = fs::read_dir(dir) {
     for entry in entries.flatten() {
@@ -39,10 +34,10 @@ pub fn collect_assets_recursively(
         }
 
         if file_type.is_dir() {
-          if in_assets_tree && name_str == excluded_dir_name {
+          if in_assets_tree && name_str == config.excluded_dir_name {
             continue;
           }
-          let next_in_assets = in_assets_tree || name_str == entry_assets_dir;
+          let next_in_assets = in_assets_tree || name_str == config.entry_assets_dir;
           collect_assets_recursively(
             collection_id,
             &path,
@@ -50,21 +45,16 @@ pub fn collect_assets_recursively(
             next_in_assets,
             asset_map,
             used_names,
-            excluded_dir_name,
-            entry_assets_dir,
-            entry_markdown_file,
-            excluded_path_fragment,
-            collection_asset_literal_prefix,
-            collection_metadata_file,
+            config,
           );
         } else if file_type.is_file()
           && (in_assets_tree
-            || name_str == entry_markdown_file
-            || name_str == collection_metadata_file)
+            || name_str == config.entry_markdown_file
+            || name_str == config.collection_metadata_file)
         {
           let rel_path_str = next_relative.to_string_lossy().replace('\\', "/");
 
-          if rel_path_str.contains(excluded_path_fragment) {
+          if rel_path_str.contains(config.excluded_path_fragment) {
             continue;
           }
 
@@ -77,7 +67,7 @@ pub fn collect_assets_recursively(
           used_names.insert(const_name.clone());
           let literal_path = format!(
             "{}/{}/{}",
-            collection_asset_literal_prefix, collection_id, rel_path_str
+            config.collection_asset_literal_prefix, collection_id, rel_path_str
           );
 
           asset_map.insert(key, AssetEntry {
@@ -155,6 +145,15 @@ mod tests {
 
     let mut asset_map = BTreeMap::new();
     let mut used_names = BTreeSet::new();
+    let config = AssetScanningConfig {
+      excluded_dir_name: "prod",
+      entry_assets_dir: "assets",
+      entry_markdown_file: "index.md",
+      excluded_path_fragment: "/prod/",
+      collection_asset_literal_prefix: "/content/programs",
+      collection_metadata_file: "collection.json",
+    };
+
     collect_assets_recursively(
       "collection",
       &collection_dir,
@@ -162,12 +161,7 @@ mod tests {
       false,
       &mut asset_map,
       &mut used_names,
-      "prod",
-      "assets",
-      "index.md",
-      "/prod/",
-      "/content/programs",
-      "collection.json",
+      &config,
     );
 
     assert!(asset_map.contains_key(&("collection".into(), "collection.json".into())));
