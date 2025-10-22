@@ -4,22 +4,22 @@ use clap::Parser;
 #[clap(author = "Albert O'Shea", version, about)]
 /// Application configuration
 struct Args {
-    /// whether to be verbose
-    #[arg(short = 'v')]
-    verbose: bool,
+  /// whether to be verbose
+  #[arg(short = 'v')]
+  verbose: bool,
 
-    /// an optional name to greet
-    #[arg()]
-    name: Option<String>,
+  /// an optional name to greet
+  #[arg()]
+  name: Option<String>,
 }
 
 fn main() {
-    let args = Args::parse();
-    if args.verbose {
-        println!("DEBUG {args:?}");
-    }
-    println!(
-        "Hello {} (from offline_dx_bundler)!",
-        args.name.unwrap_or("world".to_string())
-    );
+  let args = Args::parse();
+  if args.verbose {
+    println!("DEBUG {args:?}");
+  }
+  println!(
+    "Hello {} (from offline_dx_bundler)!",
+    args.name.unwrap_or("world".to_string())
+  );
 }
