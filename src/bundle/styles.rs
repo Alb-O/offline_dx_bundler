@@ -78,17 +78,17 @@ fn resolve_tailwind_source(layout: &OfflineProjectLayout, default: &Path) -> Res
     return Ok(default.to_path_buf());
   }
 
-  if let Some(fallback) = find_debug_tailwind_stylesheet(layout)? {
-    if is_compiled_tailwind(&fallback)? {
-      fs::copy(&fallback, default).with_context(|| {
-        format!(
-          "failed to copy fallback tailwind stylesheet {} to {}",
-          fallback.display(),
-          default.display()
-        )
-      })?;
-      return Ok(default.to_path_buf());
-    }
+  if let Some(fallback) = find_debug_tailwind_stylesheet(layout)?
+    && is_compiled_tailwind(&fallback)?
+  {
+    fs::copy(&fallback, default).with_context(|| {
+      format!(
+        "failed to copy fallback tailwind stylesheet {} to {}",
+        fallback.display(),
+        default.display()
+      )
+    })?;
+    return Ok(default.to_path_buf());
   }
 
   Ok(default.to_path_buf())
@@ -129,23 +129,6 @@ fn find_debug_tailwind_stylesheet(layout: &OfflineProjectLayout) -> Result<Optio
 mod tests {
   use super::*;
   use tempfile::tempdir;
-
-  fn layout() -> OfflineProjectLayout {
-    OfflineProjectLayout {
-      entry_assets_dir: "assets".into(),
-      entry_markdown_file: "index.md".into(),
-      collection_metadata_file: "collection.json".into(),
-      excluded_dir_name: "prod".into(),
-      excluded_path_fragment: "/prod/".into(),
-      collection_asset_literal_prefix: "/content/programs".into(),
-      offline_site_root: "site".into(),
-      collections_dir_name: "programs".into(),
-      offline_bundle_root: "target/offline-html".into(),
-      index_html_file: "index.html".into(),
-      target_dir: "target".into(),
-      offline_manifest_json: "offline_manifest.json".into(),
-    }
-  }
 
   #[test]
   fn finds_latest_hashed_stylesheet() {

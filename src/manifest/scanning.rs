@@ -143,7 +143,7 @@ mod tests {
     let dir = tempdir().unwrap();
     let root = dir.path();
     let collection_dir = root.join("collection");
-    fs::create_dir_all(collection_dir.join("entries/entry-one/assets"));
+    let _ = fs::create_dir_all(collection_dir.join("entries/entry-one/assets"));
 
     fs::write(collection_dir.join("collection.json"), "{}").unwrap();
     fs::write(collection_dir.join("entries/entry-one/index.md"), "content").unwrap();

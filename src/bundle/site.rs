@@ -53,11 +53,11 @@ pub fn patch_site_index(
     .ok_or_else(|| anyhow!("failed to extract JS module name"))?;
 
   // Find WASM file in assets directory since Dioxus no longer generates preload links
-  let assets_dir = site_root.join(&layout.entry_assets_dir());
+  let assets_dir = site_root.join(layout.entry_assets_dir());
   let wasm_name = fs::read_dir(&assets_dir)
     .with_context(|| format!("failed to read assets directory: {}", assets_dir.display()))?
     .filter_map(|entry| entry.ok())
-    .filter(|entry| entry.file_type().map_or(false, |ft| ft.is_file()))
+    .filter(|entry| entry.file_type().is_ok_and(|ft| ft.is_file()))
     .find_map(|entry| {
       let file_name = entry.file_name();
       let file_name_str = file_name.to_string_lossy();

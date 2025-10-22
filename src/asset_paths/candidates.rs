@@ -98,10 +98,10 @@ impl<'a> CandidateBuilder<'a> {
       if let Some(entry) = self.entry {
         self.push(format!("{entry}/{slug}/{path}"));
       }
-    } else if self.slug_was_provided {
-      if let Some(entry) = self.entry {
-        self.push(format!("{entry}/{path}"));
-      }
+    } else if self.slug_was_provided
+      && let Some(entry) = self.entry
+    {
+      self.push(format!("{entry}/{path}"));
     }
   }
 

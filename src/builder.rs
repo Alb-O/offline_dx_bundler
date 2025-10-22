@@ -159,7 +159,7 @@ pub(crate) fn offline_collection_asset(collection_id: &str, relative_path: &str)
 
     let mut rerun_paths = vec![self.context.collections_dir.to_path_buf()];
     rerun_paths.push(self.context.collections_local_path.to_path_buf());
-    append_collection_metadata_paths(self.context.collections_dir, &layout, &mut rerun_paths);
+    append_collection_metadata_paths(self.context.collections_dir, layout, &mut rerun_paths);
 
     Ok(OfflineArtifacts {
       asset_table_code,
@@ -457,30 +457,6 @@ fn sanitize_entry_ident(
 mod tests {
   use super::*;
   use tempfile::tempdir;
-
-  struct AllowAll;
-  impl CollectionInclusion for AllowAll {
-    fn is_included(&self, _collection_id: &str) -> bool {
-      true
-    }
-  }
-
-  fn layout() -> OfflineProjectLayout {
-    OfflineProjectLayout {
-      entry_assets_dir: "assets".into(),
-      entry_markdown_file: "index.md".into(),
-      collection_metadata_file: "collection.json".into(),
-      excluded_dir_name: "prod".into(),
-      excluded_path_fragment: "/prod/".into(),
-      collection_asset_literal_prefix: "/content/programs".into(),
-      offline_site_root: "site".into(),
-      collections_dir_name: "programs".into(),
-      offline_bundle_root: "target/offline-html".into(),
-      index_html_file: "index.html".into(),
-      target_dir: "target".into(),
-      offline_manifest_json: "offline_manifest.json".into(),
-    }
-  }
 
   #[test]
   fn prune_mirror_tree_removes_stale_entries() -> std::io::Result<()> {

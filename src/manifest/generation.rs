@@ -89,156 +89,156 @@ fn walk_collection_tree<S: CollectionInclusion>(
     meta = serde_json::from_value(payload).ok();
   }
 
-  if let Some(meta) = meta {
-    if selection.is_included(collection_id) {
-      collect_assets_recursively(
-        collection_id,
-        collection_path,
-        Path::new(""),
-        false,
-        asset_map,
-        used_names,
-        &collection_layout.excluded_dir_name,
-        &collection_layout.entry_assets_dir,
-        &collection_layout.entry_markdown_file,
-        &collection_layout.excluded_path_fragment,
-        &collection_layout.collection_asset_literal_prefix,
-        collection_layout.collection_metadata_file.as_str(),
-      );
+  if let Some(meta) = meta
+    && selection.is_included(collection_id)
+  {
+    collect_assets_recursively(
+      collection_id,
+      collection_path,
+      Path::new(""),
+      false,
+      asset_map,
+      used_names,
+      &collection_layout.excluded_dir_name,
+      &collection_layout.entry_assets_dir,
+      &collection_layout.entry_markdown_file,
+      &collection_layout.excluded_path_fragment,
+      &collection_layout.collection_asset_literal_prefix,
+      collection_layout.collection_metadata_file.as_str(),
+    );
 
-      if let Some(hero_image) = meta.hero_image.as_deref() {
-        let hero_rel = hero_image.trim_start_matches('/').replace('\\', "/");
-        if !hero_rel.is_empty() {
-          asset_map
-            .entry((collection_id.to_string(), hero_rel.clone()))
-            .or_insert_with(|| {
-              let const_name = sanitize_const_name(collection_id, &hero_rel, used_names);
-              used_names.insert(const_name.clone());
-              let asset_path = format!(
-                "{}/{}/{}",
-                collection_layout.collection_asset_literal_prefix.as_str(),
-                collection_id,
-                hero_rel
-              );
-              AssetEntry {
-                const_name: const_name.clone(),
-                literal_path: asset_path,
-                collection_id: collection_id.to_string(),
-                relative_path: hero_rel.clone(),
-              }
-            });
-
-          if let Some(entry) = asset_map.get(&(collection_id.to_string(), hero_rel.clone())) {
-            let collection_literal = serde_json::to_string(collection_id).unwrap();
-            hero_match_arms.push(format!(
-              "        {} => Some(&{}),",
-              collection_literal, entry.const_name
-            ));
-            hero_asset_paths.insert(make_offline_asset_path(
-              &collection_layout,
-              &entry.collection_id,
-              &entry.relative_path,
-            ));
-          }
-        }
-      }
-
-      let mut entry_records: Vec<(usize, EntryRecord)> = Vec::new();
-
-      if let Ok(entry_iter) = fs::read_dir(collection_path) {
-        for entry_dir in entry_iter.flatten() {
-          let entry_path = entry_dir.path();
-
-          if !entry_path.is_dir() {
-            continue;
-          }
-
-          let entry_id = entry_dir.file_name().to_string_lossy().to_string();
-
-          if entry_id.starts_with('.') || entry_id == collection_layout.entry_assets_dir {
-            continue;
-          }
-
-          let markdown_path = entry_path.join(&collection_layout.entry_markdown_file);
-          if !markdown_path.exists() {
-            continue;
-          }
-
-          if let Some((frontmatter, body)) = parse_entry_markdown(&markdown_path) {
-            let entry_title = frontmatter
-              .title
-              .clone()
-              .or_else(|| extract_first_heading(&body))
-              .unwrap_or_else(|| entry_id.clone());
-
-            let order = frontmatter
-              .order
-              .or_else(|| parse_order_from_id(&entry_id))
-              .unwrap_or(usize::MAX);
-
-            let asset_slug = meta.asset_slug.as_deref();
-
-            let references = collect_markdown_asset_references(&body);
-            let (resolved_assets, unresolved_assets) = resolve_markdown_assets(
-              &collection_layout,
-              &references,
-              asset_map,
+    if let Some(hero_image) = meta.hero_image.as_deref() {
+      let hero_rel = hero_image.trim_start_matches('/').replace('\\', "/");
+      if !hero_rel.is_empty() {
+        asset_map
+          .entry((collection_id.to_string(), hero_rel.clone()))
+          .or_insert_with(|| {
+            let const_name = sanitize_const_name(collection_id, &hero_rel, used_names);
+            used_names.insert(const_name.clone());
+            let asset_path = format!(
+              "{}/{}/{}",
+              collection_layout.collection_asset_literal_prefix.as_str(),
               collection_id,
-              &entry_id,
-              asset_slug,
+              hero_rel
             );
-
-            if !unresolved_assets.is_empty() {
-              for unresolved in unresolved_assets {
-                println!(
-                  "cargo:warning=Unresolved offline asset reference '{}' in {}/{}",
-                  unresolved, collection_id, entry_id
-                );
-              }
-            }
-
-            offline_entries.push(OfflineEntryRecord {
+            AssetEntry {
+              const_name: const_name.clone(),
+              literal_path: asset_path,
               collection_id: collection_id.to_string(),
-              entry_id: entry_id.clone(),
-              body: body.clone(),
-              asset_paths: resolved_assets,
-            });
+              relative_path: hero_rel.clone(),
+            }
+          });
 
-            entry_records.push((order, EntryRecord {
-              id: entry_id.clone(),
-              title: entry_title,
-              section: frontmatter.section.clone(),
-              sequence: order,
-              source: format!(
-                "{}/{}/{}",
-                collection_id, entry_id, collection_layout.entry_markdown_file
-              ),
-            }));
-          }
+        if let Some(entry) = asset_map.get(&(collection_id.to_string(), hero_rel.clone())) {
+          let collection_literal = serde_json::to_string(collection_id).unwrap();
+          hero_match_arms.push(format!(
+            "        {} => Some(&{}),",
+            collection_literal, entry.const_name
+          ));
+          hero_asset_paths.insert(make_offline_asset_path(
+            &collection_layout,
+            &entry.collection_id,
+            &entry.relative_path,
+          ));
         }
       }
-
-      entry_records.sort_by(|(order_a, entry_a), (order_b, entry_b)| {
-        order_a
-          .cmp(order_b)
-          .then_with(|| entry_a.id.cmp(&entry_b.id))
-      });
-
-      let entries: Vec<EntryRecord> = entry_records
-        .into_iter()
-        .enumerate()
-        .map(|(index, (_, mut entry))| {
-          entry.sequence = index + 1;
-          entry
-        })
-        .collect();
-
-      collection_catalog.push(CollectionCatalogRecord {
-        id: collection_id.to_string(),
-        meta,
-        entries,
-      });
     }
+
+    let mut entry_records: Vec<(usize, EntryRecord)> = Vec::new();
+
+    if let Ok(entry_iter) = fs::read_dir(collection_path) {
+      for entry_dir in entry_iter.flatten() {
+        let entry_path = entry_dir.path();
+
+        if !entry_path.is_dir() {
+          continue;
+        }
+
+        let entry_id = entry_dir.file_name().to_string_lossy().to_string();
+
+        if entry_id.starts_with('.') || entry_id == collection_layout.entry_assets_dir {
+          continue;
+        }
+
+        let markdown_path = entry_path.join(&collection_layout.entry_markdown_file);
+        if !markdown_path.exists() {
+          continue;
+        }
+
+        if let Some((frontmatter, body)) = parse_entry_markdown(&markdown_path) {
+          let entry_title = frontmatter
+            .title
+            .clone()
+            .or_else(|| extract_first_heading(&body))
+            .unwrap_or_else(|| entry_id.clone());
+
+          let order = frontmatter
+            .order
+            .or_else(|| parse_order_from_id(&entry_id))
+            .unwrap_or(usize::MAX);
+
+          let asset_slug = meta.asset_slug.as_deref();
+
+          let references = collect_markdown_asset_references(&body);
+          let (resolved_assets, unresolved_assets) = resolve_markdown_assets(
+            &collection_layout,
+            &references,
+            asset_map,
+            collection_id,
+            &entry_id,
+            asset_slug,
+          );
+
+          if !unresolved_assets.is_empty() {
+            for unresolved in unresolved_assets {
+              println!(
+                "cargo:warning=Unresolved offline asset reference '{}' in {}/{}",
+                unresolved, collection_id, entry_id
+              );
+            }
+          }
+
+          offline_entries.push(OfflineEntryRecord {
+            collection_id: collection_id.to_string(),
+            entry_id: entry_id.clone(),
+            body: body.clone(),
+            asset_paths: resolved_assets,
+          });
+
+          entry_records.push((order, EntryRecord {
+            id: entry_id.clone(),
+            title: entry_title,
+            section: frontmatter.section.clone(),
+            sequence: order,
+            source: format!(
+              "{}/{}/{}",
+              collection_id, entry_id, collection_layout.entry_markdown_file
+            ),
+          }));
+        }
+      }
+    }
+
+    entry_records.sort_by(|(order_a, entry_a), (order_b, entry_b)| {
+      order_a
+        .cmp(order_b)
+        .then_with(|| entry_a.id.cmp(&entry_b.id))
+    });
+
+    let entries: Vec<EntryRecord> = entry_records
+      .into_iter()
+      .enumerate()
+      .map(|(index, (_, mut entry))| {
+        entry.sequence = index + 1;
+        entry
+      })
+      .collect();
+
+    collection_catalog.push(CollectionCatalogRecord {
+      id: collection_id.to_string(),
+      meta,
+      entries,
+    });
   }
 
   if let Ok(children) = fs::read_dir(collection_path) {
@@ -325,7 +325,7 @@ mod tests {
     let collections_dir = dir.path();
 
     let collection_dir = collections_dir.join("p001-intro");
-    fs::create_dir_all(collection_dir.join("assets"));
+    let _ = fs::create_dir_all(collection_dir.join("assets"));
 
     write_file(
       &collection_dir.join("collection.json"),

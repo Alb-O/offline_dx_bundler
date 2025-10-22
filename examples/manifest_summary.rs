@@ -1,4 +1,4 @@
-use offline_dx_bundler::models::{OfflineManifestSummary, OfflineModuleSummary};
+use offline_dx_bundler::models::{OfflineEntrySummary, OfflineManifestSummary};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   // Example manifest containing two programs with a single module each. In a real
@@ -10,13 +10,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "hero_assets": ["programs/deckhand/images/hero.jpg"],
         "modules": [
             {
-                "program_id": "deckhand",
-                "module_id": "introduction",
+                "entry_id": "deckhand",
+                "collection_id": "introduction",
                 "asset_paths": ["programs/deckhand/assets/images/chart.png"]
             },
             {
-                "program_id": "watchkeeping",
-                "module_id": "safety",
+                "entry_id": "watchkeeping",
+                "collection_id": "safety",
                 "asset_paths": []
             }
         ]
@@ -28,13 +28,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   println!("Offline site root: {}", summary.site_root);
   println!("Hero assets: {}", summary.hero_assets.join(", "));
 
-  for OfflineModuleSummary {
-    program_id,
-    module_id,
+  for OfflineEntrySummary {
+    entry_id,
+    collection_id,
     asset_paths,
-  } in summary.modules
+  } in summary.entries
   {
-    println!("{program_id}/{module_id} ({} assets)", asset_paths.len());
+    println!("{entry_id}/{collection_id} ({} assets)", asset_paths.len());
   }
 
   Ok(())

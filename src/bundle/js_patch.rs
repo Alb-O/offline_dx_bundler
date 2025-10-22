@@ -120,10 +120,8 @@ pub fn find_binary_name() -> Result<String> {
           .and_then(|value| value.as_array())
           .map(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("bin")))
           .unwrap_or(false);
-        if is_bin {
-          if let Some(name) = target.get("name").and_then(|value| value.as_str()) {
-            return Ok(name.to_string());
-          }
+        if is_bin && let Some(name) = target.get("name").and_then(|value| value.as_str()) {
+          return Ok(name.to_string());
         }
       }
     }
